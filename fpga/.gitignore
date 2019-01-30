@@ -1,0 +1,6 @@
+.Xil/
+picoevb.prm
+vivado*.jou
+vivado*.log
+vivado-project/
+vivado-project.srcs/

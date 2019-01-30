@@ -1,0 +1,4 @@
+Portions of this repository are provided under the following licenses:
+
+GPL v2: See COPYING
+MIT: See LICENSE-MIT.txt
