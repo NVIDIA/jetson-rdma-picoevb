@@ -1,11 +1,14 @@
 # Introduction
 
 This repository provides a minimal hardware-based demonstration of GPUDirect
-RDMA on NVIDIA Jetson AGX Xavier (Jetson) running Linux for Tegra (L4T). This
-feature allows a PCIe device to directly access CUDA GPU memory, thus allowing
-zero-copy sharing of data between CUDA and a PCIe device.
+RDMA. This feature allows a PCIe device to directly access CUDA memory, thus
+allowing zero-copy sharing of data between CUDA and a PCIe device.
 
-A graphical repreentation of the system configuration created by the software
+The code supports both:
+* NVIDIA Jetson AGX Xavier (Jetson) running Linux for Tegra (L4T).
+* A PC running the NVIDIA CUDA drivers and containing a Quadro or Tesla GPU.
+
+A graphical representation of the system configuration created by the software
 in this repository, and the data flow between components, is shown below:
 
 ![RDMA Configuration and Data Flow](rdma-flow.svg)
@@ -26,13 +29,13 @@ USB bus. It is available from:
 ### PCIe Adapter Board
 
 The PicoEVB board is a double-sided M.2 device. Jetson physically only supports
-boards with a full-size PCIe connector, or single-sided M.2 devices. Some form
-of adapter is required to connect the two in a mechanically reliable way.
+boards with a full-size PCIe connector, or single-sided M.2 devices. PCs
+typically only support boards with a full-size PCIe connector. Some form of
+adapter is required to connect the two in a mechanically reliable way.
 
 A PCIe x16/x8/x4/x2/x1 to M.2 key E adapter may be used to plug the PicoEVB
-board into Jetson's full-size PCIe slot. The same adapter enables the PicoEVB
-board to be plugged into a desktop PC for development. One such adapter board
-may be available from Amazon as ASIN B013U4401W, product name "Sourcingbay
+board into a full-size PCIe slot on Jetson or a PC. One such adapter board may
+be available from Amazon as ASIN B013U4401W, product name "Sourcingbay
 M.2(NGFF) Wireless Card to PCI-e 1X Adapter".
 
 The following pair of adapters may be used to connect the PicoEVB board to
@@ -137,7 +140,7 @@ hung, but is actually running.
 
 # Linux Kernel Driver
 
-## Building on Jetson
+## Building on Jetson, to Run on Jetson
 
 To build the Linux kernel driver on Jetson, execute:
 
@@ -150,7 +153,7 @@ cd /path/to/this/project/kernel-module/
 
 This will generate `picoevb-rdma.ko`.
 
-## Building on an x86 Linux PC
+## Building on an x86 Linux PC, to Run on Jetson
 
 The Linux kernel driver may alternatively be built (cross-compiled) on an x86
 Linux PC. You will first need to obtain a copy of the "Linux headers" or
@@ -169,6 +172,17 @@ KDIR=/path/to/linux-headers-4.9.140-tegra-linux_x86_64/kernel-4.9/ ./build-for-j
 ```
 
 This will generate `picoevb-rdma.ko`. This file must be copied to Jetson.
+
+## Building on an x86 Linux PC, to Run on That PC
+
+```
+sudo apt update
+sudo apt install build-essential bc
+cd /path/to/this/project/kernel-module/
+./build-for-pc-native.sh
+```
+
+This will generate `picoevb-rdma.ko`.
 
 ## Loading the Module
 
@@ -195,7 +209,7 @@ $ lspci -v
 
 # User-space Applications
 
-## Building on Jetson
+## Building on Jetson, to Run on Jetson
 
 The client applications are best built on Jetson itself. Make sure you have the
 CUDA development tools installed, and execute:
@@ -207,7 +221,7 @@ cd /path/to/this/project/client-applications/
 ./build-for-jetson-igpu-native.sh
 ```
 
-## Building on an x86 Linux PC
+## Building on an x86 Linux PC, to Run on Jetson
 
 Building (cross-compiling) the client applications on a x86 Linux PC is only
 partially supported; the makefile does not yet support cross-compiling the CUDA
@@ -225,13 +239,25 @@ You may need to adjust the value of variable `CROSS_COMPILE` in script
 `./build-for-jetson-igpu-on-pc.sh` to match the configuration of your x86 Linux
 PC.
 
+## Building on an x86 Linux PC, to Run on That PC
+
+Make sure you have the CUDA development tools installed, and execute:
+
+```
+sudo apt update
+sudo apt install build-essential bc
+cd /path/to/this/project/client-applications/
+./build-for-pc-native.sh
+```
+
 ## Running the Tests
 
 ### Data Access Tests
 
 Two PCIe data access tests are provided; `rdma-malloc` and `rdma-cuda`. Both
 tests are structurally identical, but allocate memory using different APIs; the
-former using `malloc()`, and the latter via `cudaHostAlloc()`.
+former using `malloc()`, and the latter via `cudaHostAlloc()` (Jetson) or
+`cudaMalloc()` (PC).
 
 Both tests proceed as following:
 
@@ -254,12 +280,13 @@ You can avoid the need to use `sudo` by applying appropriate permissions to the
 kernel driver's device file, `/dev/picoevb`.
 
 Internally to the kernel driver, the copy operation divides the surface into
-64K chunks, and for each chunk first copies that chunk's data from the source
-surface to the FPGA's internal memory, then copies the data from the FPGA's
-internal memory to the destination surface. This demonstrates both PCIe read
-and write access to CUDA GPU memory. The requirement to divide the data into
-64K chunks is a limitation of the internal memory size of the PicoEVB board's
-FPGA, and likely would not apply in a production device.
+64KiB chunks (or smaller, depending on memory alignment), and for each chunk
+first copies that chunk's data from the source surface to the FPGA's internal
+memory, then copies the data from the FPGA's internal memory to the destination
+surface. This demonstrates both PCIe read and write access to CUDA GPU memory.
+The requirement to divide the data into chunks is a limitation of the internal
+memory size of the PicoEVB board's FPGA, and likely would not apply in a
+production device.
 
 ### set-leds
 

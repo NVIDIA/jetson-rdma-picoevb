@@ -72,8 +72,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#ifdef NV_BUILD_DGPU
+	ce = cudaMalloc(&src_d, SURFACE_SIZE * sizeof(*src_d));
+#else
 	ce = cudaHostAlloc(&src_d, SURFACE_SIZE * sizeof(*src_d),
 		cudaHostAllocDefault);
+#endif
 	if (ce != cudaSuccess) {
 		fprintf(stderr, "Allocation of src_d failed: %d\n", ce);
 		return 1;
@@ -94,8 +98,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#ifdef NV_BUILD_DGPU
+	ce = cudaMalloc(&dst_d, SURFACE_SIZE * sizeof(*dst_d));
+#else
 	ce = cudaHostAlloc(&dst_d, SURFACE_SIZE * sizeof(*dst_d),
 		cudaHostAllocDefault);
+#endif
 	if (ce != cudaSuccess) {
 		fprintf(stderr, "Allocation of dst_d failed: %d\n", ce);
 		return 1;
@@ -138,7 +146,25 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	/*
+	 * dGPU on x86 does not allow GPUDirect RDMA on host pinned memory
+	 * (cudaMalloc), so we must allocate device memory, and manually copy
+	 * it to the host for validation.
+	 */
+#ifdef NV_BUILD_DGPU
+	ce = cudaMallocHost(&dst_cpu, SURFACE_SIZE * sizeof(*dst_cpu), 0);
+	if (ce != cudaSuccess) {
+		fprintf(stderr, "cudaMallocHost(dst_cpu) failed\n");
+		return 1;
+	}
+	ce = cudaMemcpy(dst_cpu, dst_d, SURFACE_SIZE * sizeof(*dst_cpu), cudaMemcpyDeviceToHost);
+	if (ce != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy() failed: %d\n", ce);
+		return 1;
+	}
+#else
 	dst_cpu = dst_d;
+#endif
 
 	ret = 0;
 	for (y = 0; y < SURFACE_H; y++) {
@@ -157,6 +183,14 @@ int main(int argc, char **argv)
 	if (ret)
 		return 1;
 
+#ifdef NV_BUILD_DGPU
+	ce = cudaFreeHost(dst_cpu);
+	if (ce != cudaSuccess) {
+		fprintf(stderr, "cudaFreeHost(dst_cpu) failed: %d\n", ce);
+		return 1;
+	}
+#endif
+
 	unpin_params_dst.handle = pin_params_dst.handle;
 	ret = ioctl(fd, PICOEVB_IOC_UNPIN_CUDA, &unpin_params_dst);
 	if (ret != 0) {
@@ -164,7 +198,11 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#ifdef NV_BUILD_DGPU
+	ce = cudaFree(dst_d);
+#else
 	ce = cudaFreeHost(dst_d);
+#endif
 	if (ce != cudaSuccess) {
 		fprintf(stderr, "Free of dst_d failed: %d\n", ce);
 		return 1;
@@ -177,7 +215,11 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#ifdef NV_BUILD_DGPU
+	ce = cudaFree(src_d);
+#else
 	ce = cudaFreeHost(src_d);
+#endif
 	if (ce != cudaSuccess) {
 		fprintf(stderr, "Free of src_d failed: %d\n", ce);
 		return 1;

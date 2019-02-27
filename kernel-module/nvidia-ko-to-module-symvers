@@ -1,0 +1,24 @@
+#!/bin/bash
+
+syms=()
+syms+=(nvidia_p2p_init_mapping)
+syms+=(nvidia_p2p_destroy_mapping)
+syms+=(nvidia_p2p_get_pages)
+syms+=(nvidia_p2p_put_pages)
+syms+=(nvidia_p2p_free_page_table)
+syms+=(nvidia_p2p_dma_map_pages)
+syms+=(nvidia_p2p_dma_unmap_pages)
+
+nvidia_ko_fn="$1"
+symvers_fn="$2"
+
+touch "${symvers_fn}"
+for sym in "${syms[@]}"; do
+	crc="$(objdump -t "${nvidia_ko_fn}" | grep "__crc_${sym}" | awk '{print $1}')"
+	if [ -z "${crc}" ]; then
+		echo "Warning: Can't find symbol ${sym} in ${nvidia_ko_fn}; assuming CONFIG_MODVERSIONS=n so setting CRC=0"
+		crc=00000000
+	fi
+	sed -i '/${sym}/d' "${symvers_fn}"
+	echo "0x${crc}	${sym}	${nvidia_ko_fn}	EXPORT_SYMBOL" >> ${symvers_fn}
+done

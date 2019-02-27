@@ -1,3 +1,5 @@
+#!/bin/sh
+
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
@@ -18,33 +20,17 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-CC ?= $(CROSS_COMPILE)gcc
-ifeq ($(CUDA_TOOLKIT),)
-	CUDA_TOOLKIT := $(wildcard /usr/local/cuda-10.1)
-endif
-ifeq ($(CUDA_TOOLKIT),)
-	CUDA_TOOLKIT := $(wildcard /usr/local/cuda-10.0)
-endif
-NVCC ?= $(CUDA_TOOLKIT)/bin/nvcc
+export NV_BUILD_DGPU=1
+export NVIDIA_SRC_DIR="$(find /usr/src/nvidia-* -name nv-p2p.h 2>/dev/null|head -1|xargs dirname 2>/dev/null)"
+if [ ! -d "${NVIDIA_SRC_DIR}" ]; then
+	echo "ERROR: Could not find nv-p2p.h"
+	exit 1
+fi
 
-CFLAGS := \
-	-ggdb
-ifdef NV_BUILD_DGPU
-	CFLAGS += \
-		-DNV_BUILD_DGPU
-endif
+export NVIDIA_KO"=$(find /lib/modules/$(uname -r)/ -name 'nvidia*.ko'|grep -P 'nvidia(_[0-9]+)?.ko'|head -1)"
+if [ ! -f "${NVIDIA_KO}" ]; then
+	echo "ERROR: Could not find nvidia.ko"
+	exit 1
+fi
 
-TARGETS := rdma-cuda rdma-malloc set-leds
-default: $(TARGETS)
-
-rdma-cuda: rdma-cuda.cu ../kernel-module/picoevb-rdma-ioctl.h Makefile
-	$(NVCC) $(addprefix -Xcompiler ,$(CFLAGS)) -o $@ $< -l cuda
-
-rdma-malloc: rdma-malloc.c ../kernel-module/picoevb-rdma-ioctl.h Makefile
-	$(CC) $(CFLAGS) -o $@ $<
-
-set-leds: set-leds.c ../kernel-module/picoevb-rdma-ioctl.h Makefile
-	$(CC) $(CFLAGS) -o $@ $<
-
-clean:
-	rm -f $(TARGETS)
+exec make

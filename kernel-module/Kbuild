@@ -9,4 +9,10 @@
 # FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
 # more details.
 
+ifdef NV_BUILD_DGPU
+	KBUILD_CFLAGS += \
+		-I$(NVIDIA_SRC_DIR) \
+		-DNV_BUILD_DGPU
+endif
+
 obj-m += picoevb-rdma.o

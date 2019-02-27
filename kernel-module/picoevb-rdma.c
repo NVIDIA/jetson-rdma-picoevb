@@ -15,10 +15,16 @@
 #include <linux/idr.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
-#include <linux/nv-p2p.h>
 #include <linux/pagemap.h>
 #include <linux/pci.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
+
+#ifdef NV_BUILD_DGPU
+#include <nv-p2p.h>
+#else
+#include <linux/nv-p2p.h>
+#endif
 
 #include "picoevb-rdma-ioctl.h"
 #include "picoevb-rdma.h"
@@ -31,7 +37,11 @@
 #define NUM_H2C_CHANS	1
 #define FPGA_RAM_SIZE	SZ_64K
 
+#ifdef NV_BUILD_DGPU
+#define GPU_PAGE_SHIFT	16
+#else
 #define GPU_PAGE_SHIFT	12
+#endif
 #define GPU_PAGE_SIZE	(((u64)1) << GPU_PAGE_SHIFT)
 #define GPU_PAGE_OFFSET	(GPU_PAGE_SIZE - 1)
 #define GPU_PAGE_MASK	(~GPU_PAGE_OFFSET)
@@ -86,6 +96,7 @@ struct pevb_userbuf {
 			int map_ret;
 		} pages;
 		struct {
+			struct pevb_cuda_surface *cusurf;
 			struct nvidia_p2p_dma_mapping *map;
 		} cuda;
 	} priv;
@@ -127,6 +138,22 @@ static int pevb_fops_open(struct inode *inode, struct file *filep)
 	return 0;
 }
 
+static void pevb_p2p_free_callback(void *data)
+{
+	struct pevb_cuda_surface *cusurf = data;
+	struct pevb_file *pevb_file = cusurf->pevb_file;
+
+	mutex_lock(&pevb_file->lock);
+	if (cusurf->handle >= 0) {
+		idr_remove(&pevb_file->cuda_surfaces, cusurf->handle);
+		cusurf->handle = -1;
+	}
+	mutex_unlock(&pevb_file->lock);
+
+	nvidia_p2p_free_page_table(cusurf->page_table);
+	kfree(cusurf);
+}
+
 static int pevb_fops_release(struct inode *inode, struct file *filep)
 {
 	struct pevb_file *pevb_file = filep->private_data;
@@ -148,11 +175,19 @@ static int pevb_fops_release(struct inode *inode, struct file *filep)
 
 		mutex_unlock(&pevb_file->lock);
 
+		nvidia_p2p_put_pages(
+#ifdef NV_BUILD_DGPU
+			0, 0, cusurf->va,
+#endif
+			cusurf->page_table);
+#ifdef NV_BUILD_DGPU
+		pevb_p2p_free_callback(cusurf);
+#else
 		/*
-		 * nvidia_p2p_put_pages calls() calls pevb_p2p_free_callback()
-		 * which frees cusurf.
+		 * nvidia_p2p_put_pages() calls pevb_p2p_free_callback() which
+		 * frees cusurf.
 		 */
-		nvidia_p2p_put_pages(cusurf->page_table);
+#endif
 	}
 
 	kfree(pevb_file);
@@ -166,22 +201,6 @@ static int pevb_ioctl_led(struct pevb_file *pevb_file, unsigned long arg)
 
 	pevb_writel(pevb, BAR_GPIO, arg, 0);
 	return 0;
-}
-
-static void pevb_p2p_free_callback(void *data)
-{
-	struct pevb_cuda_surface *cusurf = data;
-	struct pevb_file *pevb_file = cusurf->pevb_file;
-
-	mutex_lock(&pevb_file->lock);
-	if (cusurf->handle >= 0) {
-		idr_remove(&pevb_file->cuda_surfaces, cusurf->handle);
-		cusurf->handle = -1;
-	}
-	mutex_unlock(&pevb_file->lock);
-
-	nvidia_p2p_free_page_table(cusurf->page_table);
-	kfree(cusurf);
 }
 
 static int pevb_ioctl_pin_cuda(struct pevb_file *pevb_file, unsigned long arg)
@@ -203,8 +222,12 @@ static int pevb_ioctl_pin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 	cusurf->offset = pin_params.va & GPU_PAGE_OFFSET;
 	cusurf->len = pin_params.size;
 
-	ret = nvidia_p2p_get_pages(cusurf->va, cusurf->offset + cusurf->len,
-		&cusurf->page_table, pevb_p2p_free_callback, cusurf);
+	ret = nvidia_p2p_get_pages(
+#ifdef NV_BUILD_DGPU
+		0, 0,
+#endif
+		cusurf->va, cusurf->offset + cusurf->len, &cusurf->page_table,
+		pevb_p2p_free_callback, cusurf);
 	if (ret < 0) {
 		kfree(cusurf);
 		return ret;
@@ -229,11 +252,19 @@ static int pevb_ioctl_pin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 	return 0;
 
 put_pages:
+	nvidia_p2p_put_pages(
+#ifdef NV_BUILD_DGPU
+		0, 0, cusurf->va,
+#endif
+		cusurf->page_table);
+#ifdef NV_BUILD_DGPU
+	pevb_p2p_free_callback(cusurf);
+#else
 	/*
-	 * nvidia_p2p_put_pages calls() calls pevb_p2p_free_callback() which
+	 * nvidia_p2p_put_pages() calls pevb_p2p_free_callback() which
 	 * frees cusurf.
 	 */
-	nvidia_p2p_put_pages(cusurf->page_table);
+#endif
 
 	return ret;
 }
@@ -257,11 +288,19 @@ static int pevb_ioctl_unpin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 	cusurf->handle = -1;
 	mutex_unlock(&pevb_file->lock);
 
+	nvidia_p2p_put_pages(
+#ifdef NV_BUILD_DGPU
+		0, 0, cusurf->va,
+#endif
+		cusurf->page_table);
+#ifdef NV_BUILD_DGPU
+	pevb_p2p_free_callback(cusurf);
+#else
 	/*
-	 * nvidia_p2p_put_pages calls() calls pevb_p2p_free_callback() which
+	 * nvidia_p2p_put_pages() calls pevb_p2p_free_callback() which
 	 * frees cusurf.
 	 */
-	nvidia_p2p_put_pages(cusurf->page_table);
+#endif
 
 	return 0;
 }
@@ -304,12 +343,18 @@ static int pevb_get_userbuf_cuda(struct pevb_file *pevb_file,
 	cusurf = idr_find(&pevb_file->cuda_surfaces, id);
 	if (!cusurf)
 		return -EINVAL;
+	ubuf->priv.cuda.cusurf = cusurf;
 
 	if (len > cusurf->len)
 		return -EINVAL;
 
+#ifdef NV_BUILD_DGPU
+	ret = nvidia_p2p_dma_map_pages(pevb->pdev, cusurf->page_table,
+		&ubuf->priv.cuda.map);
+#else
 	ret = nvidia_p2p_dma_map_pages(&pevb->pdev->dev, cusurf->page_table,
 		&ubuf->priv.cuda.map, to_dev ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
+#endif
 	if (ret < 0)
 		return ret;
 
@@ -321,10 +366,15 @@ static int pevb_get_userbuf_cuda(struct pevb_file *pevb_file,
 	offset = cusurf->offset;
 	len_left = cusurf->len;
 	for (i = 0; i < ubuf->priv.cuda.map->entries; i++) {
-		dma_addr_t dma_this = ubuf->priv.cuda.map->hw_address[i] +
-			offset;
+#ifdef NV_BUILD_DGPU
+		dma_addr_t dma_this = ubuf->priv.cuda.map->dma_addresses[i];
+		u64 len_this = min(GPU_PAGE_SIZE - offset, len_left);
+#else
+		dma_addr_t dma_this = ubuf->priv.cuda.map->hw_address[i];
 		u64 len_this = ubuf->priv.cuda.map->hw_len[i];
+#endif
 
+		dma_this += offset;
 		pevb_userbuf_add_dma_chunk(ubuf, dma_this, len_this);
 
 		if (len_this >= len_left)
@@ -359,8 +409,13 @@ static int pevb_get_userbuf_pages(struct pevb *pevb, struct pevb_userbuf *ubuf,
 	if (!ubuf->priv.pages.pages)
 		return -ENOMEM;
 
-	ubuf->priv.pages.pagecount = get_user_pages(start, nr_pages,
-		to_dev ? 0 : FOLL_WRITE, ubuf->priv.pages.pages, NULL);
+	ubuf->priv.pages.pagecount = get_user_pages(
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
+		current, current->mm,
+#endif
+		start, nr_pages,
+		to_dev ? 0 : FOLL_WRITE,
+		ubuf->priv.pages.pages, NULL);
 	if (ubuf->priv.pages.pagecount != nr_pages) {
 		if (ubuf->priv.pages.pagecount < 0)
 			return ubuf->priv.pages.pagecount;
@@ -405,14 +460,24 @@ static void pevb_put_userbuf_pages(struct pevb *pevb, struct pevb_userbuf *ubuf)
 				DMA_TO_DEVICE : DMA_FROM_DEVICE);
 	if (ubuf->priv.pages.sgt)
 		sg_free_table(ubuf->priv.pages.sgt);
-	release_pages(ubuf->priv.pages.pages, ubuf->priv.pages.pagecount, -1);
+	release_pages(ubuf->priv.pages.pages, ubuf->priv.pages.pagecount
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
+		, 0
+#endif
+	);
 	kfree(ubuf->priv.pages.pages);
 }
 
 static void pevb_put_userbuf_cuda(struct pevb *pevb, struct pevb_userbuf *ubuf)
 {
 	if (ubuf->priv.cuda.map)
+#ifdef NV_BUILD_DGPU
+		nvidia_p2p_dma_unmap_pages(pevb->pdev,
+			ubuf->priv.cuda.cusurf->page_table,
+			ubuf->priv.cuda.map);
+#else
 		nvidia_p2p_dma_unmap_pages(ubuf->priv.cuda.map);
+#endif
 }
 
 static void pevb_put_userbuf(struct pevb *pevb, struct pevb_userbuf *ubuf)

@@ -9,10 +9,17 @@
 # FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
 # more details.
 
-KDIR ?= "/lib/modules/$(shell uname -r)/build"
+KDIR ?= /lib/modules/$(shell uname -r)/build
 
 .PHONY: default
 default: modules
 
 %:
 	$(MAKE) -C "$(KDIR)" "M=$$PWD" "$@"
+
+ifdef NV_BUILD_DGPU
+modules: Module.symvers
+
+Module.symvers: $(NVIDIA_KO) nvidia-ko-to-module-symvers
+	./nvidia-ko-to-module-symvers "$<" "$@"
+endif
