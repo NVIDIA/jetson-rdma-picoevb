@@ -55,6 +55,7 @@ struct pevb_file {
 
 struct pevb_cuda_surface {
 	struct pevb_file		*pevb_file;
+	u64				len;
 	int				handle;
 	struct nvidia_p2p_page_table	*page_table;
 };
@@ -185,6 +186,7 @@ static int pevb_ioctl_pin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 		return -ENOMEM;
 
 	cusurf->pevb_file = pevb_file;
+	cusurf->len = pin_params.size;
 
 	/*
 	 * This function assumes that pin_params.va is page-aligned. The CUDA
@@ -273,6 +275,9 @@ static int pevb_get_userbuf_cuda(struct pevb_file *pevb_file,
 
 	cusurf = idr_find(&pevb_file->cuda_surfaces, id);
 	if (!cusurf)
+		return -EINVAL;
+
+	if (len > cusurf->len)
 		return -EINVAL;
 
 	ret = nvidia_p2p_dma_map_pages(&pevb->pdev->dev, cusurf->page_table,
