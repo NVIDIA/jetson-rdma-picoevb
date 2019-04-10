@@ -5,6 +5,11 @@ RDMA on NVIDIA Jetson AGX Xavier (Jetson) running Linux for Tegra (L4T). This
 feature allows a PCIe device to directly access CUDA GPU memory, thus allowing
 zero-copy sharing of data between CUDA and a PCIe device.
 
+A graphical repreentation of the system configuration created by the software
+in this repository, and the data flow between components, is shown below:
+
+![RDMA Configuration and Data Flow](rdma-flow.svg)
+
 # PCIe Device
 
 ## Obtaining the Hardware
