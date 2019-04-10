@@ -31,6 +31,11 @@
 #define NUM_H2C_CHANS	1
 #define FPGA_RAM_SIZE	SZ_64K
 
+#define GPU_PAGE_SHIFT	12
+#define GPU_PAGE_SIZE	(((u64)1) << GPU_PAGE_SHIFT)
+#define GPU_PAGE_OFFSET	(GPU_PAGE_SIZE - 1)
+#define GPU_PAGE_MASK	(~GPU_PAGE_OFFSET)
+
 struct pevb {
 	struct pci_dev			*pdev;
 	struct device			*dev;
@@ -55,6 +60,8 @@ struct pevb_file {
 
 struct pevb_cuda_surface {
 	struct pevb_file		*pevb_file;
+	u64				va;
+	u64				offset;
 	u64				len;
 	int				handle;
 	struct nvidia_p2p_page_table	*page_table;
@@ -186,18 +193,11 @@ static int pevb_ioctl_pin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 		return -ENOMEM;
 
 	cusurf->pevb_file = pevb_file;
+	cusurf->va = pin_params.va & GPU_PAGE_MASK;
+	cusurf->offset = pin_params.va & GPU_PAGE_OFFSET;
 	cusurf->len = pin_params.size;
 
-	/*
-	 * This function assumes that pin_params.va is page-aligned. The CUDA
-	 * user-space APIs don't guarantee this. Production code should:
-	 * - Round va down to a page boundary.
-	 * - Store the rounding offset in *cusurf for use by
-	 *   pevb_get_userbuf_cuda()'s calculation of ubuf->pcie_addr.
-	 * - Round va+size up to a page boundary.
-	 * - Recalculate size based on rounded boundaries.
-	 */
-	ret = nvidia_p2p_get_pages(pin_params.va, pin_params.size,
+	ret = nvidia_p2p_get_pages(cusurf->va, cusurf->offset + cusurf->len,
 		&cusurf->page_table, pevb_p2p_free_callback, cusurf);
 	if (ret < 0) {
 		kfree(cusurf);
@@ -294,6 +294,7 @@ static int pevb_get_userbuf_cuda(struct pevb_file *pevb_file,
 		return -EIO;
 
 	ubuf->pcie_addr = ubuf->priv.cuda.map->hw_address[0];
+	ubuf->pcie_addr += cusurf->offset;
 
 	return 0;
 }
