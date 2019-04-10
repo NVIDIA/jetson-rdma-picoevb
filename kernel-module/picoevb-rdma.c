@@ -67,9 +67,15 @@ struct pevb_cuda_surface {
 	struct nvidia_p2p_page_table	*page_table;
 };
 
+struct pevb_userbuf_dma {
+	dma_addr_t	addr;
+	u64		len;
+};
+
 struct pevb_userbuf {
 	bool cuda;
-	dma_addr_t pcie_addr;
+	int n_dmas;
+	struct pevb_userbuf_dma *dmas;
 
 	union {
 		struct {
@@ -260,12 +266,34 @@ static int pevb_ioctl_unpin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 	return 0;
 }
 
+static void pevb_userbuf_add_dma_chunk(struct pevb_userbuf *ubuf,
+	dma_addr_t addr, u64 len)
+{
+	struct pevb_userbuf_dma *dma;
+	dma_addr_t end;
+
+	if (ubuf->n_dmas) {
+		dma = &ubuf->dmas[ubuf->n_dmas - 1];
+		end = dma->addr + dma->len;
+		if (addr == end) {
+			dma->len += len;
+			return;
+		}
+	}
+
+	dma = &ubuf->dmas[ubuf->n_dmas];
+	dma->addr = addr;
+	dma->len = len;
+	ubuf->n_dmas++;
+}
+
 static int pevb_get_userbuf_cuda(struct pevb_file *pevb_file,
 	struct pevb_userbuf *ubuf, __u64 handle64, __u64 len, int to_dev)
 {
 	struct pevb *pevb = pevb_file->pevb;
-	int id, ret;
+	int id, ret, i;
 	struct pevb_cuda_surface *cusurf;
+	u64 offset, len_left;
 
 	ubuf->cuda = true;
 
@@ -285,16 +313,25 @@ static int pevb_get_userbuf_cuda(struct pevb_file *pevb_file,
 	if (ret < 0)
 		return ret;
 
-	/*
-	 * The DMA copy code is simple, and assumes an IOMMU that performs any
-	 * required scatter/gather operation such that one a single scatterlist
-	 * can represent the entire memory region.
-	 */
-	if (ubuf->priv.cuda.map->entries != 1)
-		return -EIO;
+	ubuf->dmas = kmalloc_array(ubuf->priv.cuda.map->entries,
+		sizeof(*ubuf->dmas), GFP_KERNEL);
+	if (!ubuf->dmas)
+		return -ENOMEM;
 
-	ubuf->pcie_addr = ubuf->priv.cuda.map->hw_address[0];
-	ubuf->pcie_addr += cusurf->offset;
+	offset = cusurf->offset;
+	len_left = cusurf->len;
+	for (i = 0; i < ubuf->priv.cuda.map->entries; i++) {
+		dma_addr_t dma_this = ubuf->priv.cuda.map->hw_address[i] +
+			offset;
+		u64 len_this = ubuf->priv.cuda.map->hw_len[i];
+
+		pevb_userbuf_add_dma_chunk(ubuf, dma_this, len_this);
+
+		if (len_this >= len_left)
+			break;
+		len_left -= len_this;
+		offset = 0;
+	}
 
 	return 0;
 }
@@ -305,8 +342,8 @@ static int pevb_get_userbuf_pages(struct pevb *pevb, struct pevb_userbuf *ubuf,
 	unsigned long offset;
 	unsigned long start;
 	unsigned long end;
-	int nr_pages;
-	int ret;
+	int nr_pages, ret, i;
+	struct scatterlist *sg;
 
 	ubuf->cuda = false;
 
@@ -346,15 +383,15 @@ static int pevb_get_userbuf_pages(struct pevb *pevb, struct pevb_userbuf *ubuf,
 		to_dev ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
 	if (!ubuf->priv.pages.map_ret)
 		return -EFAULT;
-	/*
-	 * The DMA copy code is simple, and assumes an IOMMU that performs any
-	 * required scatter/gather operation such that one a single scatterlist
-	 * can represent the entire memory region.
-	 */
-	if (ubuf->priv.pages.map_ret != 1)
-		return -EIO;
 
-	ubuf->pcie_addr = sg_dma_address(ubuf->priv.pages.sgt->sgl);
+	ubuf->dmas = kmalloc_array(ubuf->priv.pages.map_ret,
+		sizeof(*ubuf->dmas), GFP_KERNEL);
+	if (!ubuf->dmas)
+		return -ENOMEM;
+
+	for_each_sg(ubuf->priv.pages.sgt->sgl, sg, ubuf->priv.pages.map_ret, i)
+		pevb_userbuf_add_dma_chunk(ubuf, sg_dma_address(sg),
+			sg_dma_len(sg));
 
 	return 0;
 }
@@ -384,6 +421,7 @@ static void pevb_put_userbuf(struct pevb *pevb, struct pevb_userbuf *ubuf)
 		pevb_put_userbuf_cuda(pevb, ubuf);
 	else
 		pevb_put_userbuf_pages(pevb, ubuf);
+	kfree(ubuf->dmas);
 }
 
 static irqreturn_t pevb_irq_handler(int irq, void *data)
@@ -630,6 +668,10 @@ static int pevb_ioctl_dma(struct pevb_file *pevb_file, unsigned long arg)
 			dma_params.len, 1);
 	if (ret)
 		goto put_userbuf_src;
+	if (src_ubuf.n_dmas != 1) {
+		ret = -EINVAL;
+		goto put_userbuf_src;
+	}
 
 	if (dma_params.flags & PICOEVB_DMA_FLAG_DST_IS_CUDA)
 		ret = pevb_get_userbuf_cuda(pevb_file, &dst_ubuf,
@@ -639,8 +681,12 @@ static int pevb_ioctl_dma(struct pevb_file *pevb_file, unsigned long arg)
 			dma_params.len, 0);
 	if (ret)
 		goto put_userbuf_dst;
+	if (dst_ubuf.n_dmas != 1) {
+		ret = -EINVAL;
+		goto put_userbuf_dst;
+	}
 
-	ret = pevb_dma_h2c2h(pevb, src_ubuf.pcie_addr, dst_ubuf.pcie_addr,
+	ret = pevb_dma_h2c2h(pevb, src_ubuf.dmas[0].addr, dst_ubuf.dmas[0].addr,
 		dma_params.len);
 	if (ret)
 		goto put_userbuf_dst;
