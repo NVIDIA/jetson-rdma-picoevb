@@ -606,29 +606,55 @@ static int pevb_dma_c2h(struct pevb *pevb, dma_addr_t pcie_addr,
 	return pevb_dma(pevb, true);
 }
 
-static int pevb_dma_h2c2h(struct pevb *pevb, dma_addr_t src_addr,
-	dma_addr_t dst_addr, unsigned long len)
+static int pevb_dma_h2c2h(struct pevb *pevb, struct pevb_userbuf *src,
+	struct pevb_userbuf *dst, u64 len)
 {
-	unsigned long offset = 0;
 	int ret;
+	u64 overall_len_remaining = len;
+	int src_idx = -1, dst_idx = -1;
+	dma_addr_t src_addr, dst_addr;
+	u64 src_len_remaining = 0, dst_len_remaining = 0;
+	u64 len_chunk;
 
 	if (down_interruptible(&pevb->sem))
 		return -ERESTARTSYS;
 
-	while (len) {
-		unsigned long len_chunk =
-			min_t(unsigned long, FPGA_RAM_SIZE, len);
+	while (overall_len_remaining) {
+		if (!src_len_remaining) {
+			src_idx++;
+			if (src_idx >= src->n_dmas) {
+				ret = -EINVAL;
+				goto unlock;
+			}
+			src_addr = src->dmas[src_idx].addr;
+			src_len_remaining = src->dmas[src_idx].len;
+		}
+		if (!dst_len_remaining) {
+			dst_idx++;
+			if (dst_idx >= dst->n_dmas) {
+				ret = -EINVAL;
+				goto unlock;
+			}
+			dst_addr = dst->dmas[dst_idx].addr;
+			dst_len_remaining = dst->dmas[dst_idx].len;
+		}
 
-		ret = pevb_dma_h2c(pevb, src_addr + offset, 0, len_chunk);
+		len_chunk = min_t(u64, src_len_remaining, dst_len_remaining);
+		len_chunk = min_t(u64, len_chunk, FPGA_RAM_SIZE);
+
+		ret = pevb_dma_h2c(pevb, src_addr, 0, len_chunk);
 		if (ret)
 			goto unlock;
 
-		ret = pevb_dma_c2h(pevb, dst_addr + offset, 0, len_chunk);
+		ret = pevb_dma_c2h(pevb, dst_addr, 0, len_chunk);
 		if (ret)
 			goto unlock;
 
-		len -= len_chunk;
-		offset += len_chunk;
+		overall_len_remaining -= len_chunk;
+		src_len_remaining -= len_chunk;
+		dst_len_remaining -= len_chunk;
+		src_addr += len_chunk;
+		dst_addr += len_chunk;
 	}
 
 	ret = 0;
@@ -668,10 +694,6 @@ static int pevb_ioctl_dma(struct pevb_file *pevb_file, unsigned long arg)
 			dma_params.len, 1);
 	if (ret)
 		goto put_userbuf_src;
-	if (src_ubuf.n_dmas != 1) {
-		ret = -EINVAL;
-		goto put_userbuf_src;
-	}
 
 	if (dma_params.flags & PICOEVB_DMA_FLAG_DST_IS_CUDA)
 		ret = pevb_get_userbuf_cuda(pevb_file, &dst_ubuf,
@@ -681,13 +703,8 @@ static int pevb_ioctl_dma(struct pevb_file *pevb_file, unsigned long arg)
 			dma_params.len, 0);
 	if (ret)
 		goto put_userbuf_dst;
-	if (dst_ubuf.n_dmas != 1) {
-		ret = -EINVAL;
-		goto put_userbuf_dst;
-	}
 
-	ret = pevb_dma_h2c2h(pevb, src_ubuf.dmas[0].addr, dst_ubuf.dmas[0].addr,
-		dma_params.len);
+	ret = pevb_dma_h2c2h(pevb, &src_ubuf, &dst_ubuf, dma_params.len);
 	if (ret)
 		goto put_userbuf_dst;
 
