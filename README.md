@@ -71,15 +71,13 @@ into. This may be either an x86 Linux PC, or a Jetson system.
 Vivado relies upon a piece of software known as xvcd (Xilinx Virtual Cable
 Daemon) to communicate with the PicoEVB board for programming purposes.
 Obtain it from [github.com](https://github.com/RHSResearchLLC/xvcd). Execute
-the commands below to download, patch, and compile the software:
+the commands below to download and compile the software:
 
 ```
 sudo apt update
 sudo apt install build-essential libftdi-dev
 git clone https://github.com/RHSResearchLLC/xvcd.git
 cd xvcd/
-# This step is only required if building/running xvcd on Jetson
-git am /path/to/this/project/fpga/xvcd-Fix-operation-on-NVIDIA-Jetson.patch
 cd linux/src
 make
 ```
