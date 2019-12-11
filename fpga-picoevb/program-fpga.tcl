@@ -73,6 +73,7 @@ if {![string equal \
 
 # Program the flash
 program_hw_cfgmem -hw_cfgmem [get_property PROGRAM.HW_CFGMEM [lindex [get_hw_devices xc7a50t_0] 0]]
+endgroup
 
 # Clean up and disconnect
 close_hw_target

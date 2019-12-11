@@ -15,4 +15,9 @@ ifdef NV_BUILD_DGPU
 		-DNV_BUILD_DGPU
 endif
 
+ifdef NV_BUILD_NO_CUDA
+	KBUILD_CFLAGS += \
+		-DNV_BUILD_NO_CUDA
+endif
+
 obj-m += picoevb-rdma.o

@@ -17,7 +17,17 @@ in this repository, and the data flow between components, is shown below:
 
 ## Obtaining the Hardware
 
-### FPGA Board
+This project uses an FPGA as the PCIe device which accesses CUDA memory. The
+following FPGA boards are supported:
+
+* RHS Research PicoEVB.
+* HiTech Global HTG-K800.
+
+The following sections detail how to obtain and program each board.
+
+### RHS Research PicoEVB
+
+#### FPGA Board
 
 PicoEVB is an M.2 form-factor FPGA board which attaches to the host's PCIe
 bus for application data transfer, and is programmed via the M.2 connector's
@@ -26,7 +36,7 @@ USB bus. It is available from:
 * [picoevb.com](https://picoevb.com/).
 * [Amazon](https://amazon.com/); search for ASIN "B0779PC8S4" or "PicoEVB".
 
-### PCIe Adapter Board
+#### PCIe Adapter Board
 
 The PicoEVB board is a double-sided M.2 device. Jetson physically only supports
 boards with a full-size PCIe connector, or single-sided M.2 devices. PCs
@@ -53,17 +63,44 @@ The set of available adapters and vendors on Amazon is very variable over time.
 Some searching may be required to locate suitable adapters, from either Amazon
 or alternative websites.
 
+### HiTech Global HTG-K800
+
+#### FPGA Board
+
+HTG-K800 is a full-size x16 PCIe card. This will fit directly into the full-
+size PCIe connector on Jetson or a desktop PC. For more information, see:
+http://www.hitechglobal.com/Boards/Kintex-UltraScale.htm
+
+This project supports the XCKU-60 FPGA, although this should be easy to
+change simply by changing the FPGA project properties and re-synthesizing the
+provided Vivado project.
+
+#### JTAG Programmer
+
+You will need a Xilinx Platform Cable USB II to program the FPGA. For more
+information, see:
+https://www.xilinx.com/products/boards-and-kits/hw-usb-ii-g.html
+
 ## Obtaining FPGA Programming Software
 
 ### Xilinx Vivado Design Suite
 
 This software must run on an x86 Linux PC.
 
-Xilinx Vivado 2018.3 is used to compile the FPGA bitstream, and to
-program the bitstream into the FPGA. The free "WebPACK Edition" is sufficient.
+Xilinx Vivado is used to compile the FPGA bitstream, and to program the
+bitstream into the FPGA. The free "WebPACK Edition" is sufficient.
 Obtain this software from [the Xilinx website](https://www.xilinx.com/).
 
+The PicoEVB project requires Vivado 2018.3.
+
+The HTG-K800 project requires Vivado 2018.1.
+
+Newer versions of Vivado should be able to import these projects.
+
 ### xvcd
+
+This software is only required for the PicoEVB board; the HTG-K800 board does
+not need it.
 
 This software must run on the system that the PicoEVB FPGA card is plugged
 into. This may be either an x86 Linux PC, or a Jetson system.
@@ -84,24 +121,25 @@ make
 
 ## Generating the Bitstream
 
-A pre-compiled bitstream is provided in this project; `fpga/picoevb.mcs`. It is
+In the following text, `fpga-*/` refers to the FPGA project sub-directory. For
+PicoEVB, this is `fpga-picoevb/`, and for the HTG-K800, this is
+`fpga-htg-k800/`.
+
+A pre-compiled bitstream is provided in this project; `fpga-*/*.mcs.bz2`. It is
 not necessary to regenerate the bitstream. However, if you wish to do so,
 follow these steps:
 
-1. Open a shell prompt, and `cd` to the `fpga/` directory in this project.
+1. Open a shell prompt, and `cd` to the `fpga-*/` directory in this project.
 2. Execute `./git-to-project.sh` to generate the Vivado project files. You may
    have to adjust the `vivado` variable in this script if the `vivado`
    executable is not in your `$PATH`, or the expected installation location.
-3. Run Vivado.
-4. Open Vivado project `fpga/vivado-project/vivado-project.xpr`.
-5. In the "PROJECT MANAGER" pane, expand "PROGRAM AND DEBUG", and click
-   "Generate Bitstream". Click "Yes" to allow synthesis and implementation to
-   run first, and "OK" to launch the generation process.
-6. Wait until bitstream is complete; a pop-up dialog will appear. This will
-   take from 5-30 minutes depending on the speed of your PC.
-7. Close Vivado.
-8. Go back to the shell prompt opened above, and execute
-   `./generate-cfgmem.sh`. This generates the final programming file.
+3. Execute `./synthesize-fpga.sh` to synthesize and implement the FPGA. This
+   will generate the FPGA bitstream. Alternatively, you may perform this step
+   by opening `fpga-*/vivado-project/vivado-project.xpr` using the Vivado GUI,
+   and requesting that it perform bitstream generation. Either way, this
+   process will take from 5-60 minutes depending on the speed of your PC, and
+   which FPGA project you're building.
+4. Execute `./generate-cfgmem.sh` to generate the configuration memory image.
 
 If you make modifications to the Vivado project, or any files or IP blocks it
 contains or uses, and wish to commit those changes into source control, execute
@@ -109,6 +147,8 @@ contains or uses, and wish to commit those changes into source control, execute
 and `git-to-ips.tcl`.
 
 ## Programming the FPGA
+
+### RHS Research PicoEVB
 
 Programming the FPGA requires Vivado installed on an x86 Linux PC, and xvcd
 running on the system that contains the PicoEVB board.
@@ -123,7 +163,7 @@ To run xvcd, on the system containing the FPGA card, execute:
 
 `sudo ./xvcd -P 0x6015`
 
-On your x86 Linux PC, open a shell prompt, `cd` to the `fpga/` directory in
+On your x86 Linux PC, open a shell prompt, `cd` to the `fpga-*/` directory in
 this project, and execute:
 
 `program-fpga.sh`
@@ -135,6 +175,20 @@ programming the FPGA, you will need to execute the command again.
 The programming process will take from 20 to 40 minutes. The programming
 process generates no output for most of its operation, so may appear to have
 hung, but is actually running.
+
+### HiTech Global HTG-K800
+
+Programming the FPGA requires Vivado installed on an x86 Linux PC with the
+Xilinx platform cable attached.
+
+On your x86 Linux PC, open a shell prompt, `cd` to the `fpga-*/` directory in
+this project, and execute:
+
+`program-fpga.sh`
+
+The programming process will take a few minutes. The programming process
+generates no output for most of its operation, so may appear to have hung,
+but is actually running.
 
 # Linux Kernel Driver
 
@@ -285,6 +339,15 @@ surface. This demonstrates both PCIe read and write access to CUDA GPU memory.
 The requirement to divide the data into chunks is a limitation of the internal
 memory size of the PicoEVB board's FPGA, and likely would not apply in a
 production device.
+
+Separate test applications exist to exercise the uni-directional copy feature
+of the kernel driver, and to report transfer performance. To run these tests,
+execute:
+
+```
+sudo ./rdma-malloc-h2c-perf
+sudo ./rdma-malloc-c2h-perf
+```
 
 ### set-leds
 

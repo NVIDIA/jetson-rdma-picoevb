@@ -15,15 +15,20 @@
 #include <linux/idr.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/pci.h>
+#include <linux/sched.h>
+#include <linux/sizes.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
 
+#ifndef NV_BUILD_NO_CUDA
 #ifdef NV_BUILD_DGPU
 #include <nv-p2p.h>
 #else
 #include <linux/nv-p2p.h>
+#endif
 #endif
 
 #include "picoevb-rdma-ioctl.h"
@@ -34,9 +39,6 @@
 #define BAR_GPIO	0
 #define BAR_DMA		1
 
-#define NUM_H2C_CHANS	1
-#define FPGA_RAM_SIZE	SZ_64K
-
 #ifdef NV_BUILD_DGPU
 #define GPU_PAGE_SHIFT	16
 #else
@@ -46,9 +48,15 @@
 #define GPU_PAGE_OFFSET	(GPU_PAGE_SIZE - 1)
 #define GPU_PAGE_MASK	(~GPU_PAGE_OFFSET)
 
+struct pevb_drvdata {
+	u32 num_h2c_chans;
+	u64 fpga_ram_size;
+};
+
 struct pevb {
 	struct pci_dev			*pdev;
 	struct device			*dev;
+	const struct pevb_drvdata	*drvdata;
 	struct device			*devnode;
 	struct device_dma_parameters	dma_params;
 	dev_t				devt;
@@ -68,6 +76,7 @@ struct pevb_file {
 	struct idr	cuda_surfaces;
 };
 
+#ifndef NV_BUILD_NO_CUDA
 struct pevb_cuda_surface {
 	struct pevb_file		*pevb_file;
 	u64				va;
@@ -76,6 +85,7 @@ struct pevb_cuda_surface {
 	int				handle;
 	struct nvidia_p2p_page_table	*page_table;
 };
+#endif
 
 struct pevb_userbuf_dma {
 	dma_addr_t	addr;
@@ -83,7 +93,9 @@ struct pevb_userbuf_dma {
 };
 
 struct pevb_userbuf {
+#ifndef NV_BUILD_NO_CUDA
 	bool cuda;
+#endif
 	int n_dmas;
 	struct pevb_userbuf_dma *dmas;
 
@@ -95,10 +107,12 @@ struct pevb_userbuf {
 			struct sg_table *sgt;
 			int map_ret;
 		} pages;
+#ifndef NV_BUILD_NO_CUDA
 		struct {
 			struct pevb_cuda_surface *cusurf;
 			struct nvidia_p2p_dma_mapping *map;
 		} cuda;
+#endif
 	} priv;
 };
 
@@ -138,6 +152,7 @@ static int pevb_fops_open(struct inode *inode, struct file *filep)
 	return 0;
 }
 
+#ifndef NV_BUILD_NO_CUDA
 static void pevb_p2p_free_callback(void *data)
 {
 	struct pevb_cuda_surface *cusurf = data;
@@ -153,11 +168,13 @@ static void pevb_p2p_free_callback(void *data)
 	nvidia_p2p_free_page_table(cusurf->page_table);
 	kfree(cusurf);
 }
+#endif
 
 static int pevb_fops_release(struct inode *inode, struct file *filep)
 {
 	struct pevb_file *pevb_file = filep->private_data;
 
+#ifndef NV_BUILD_NO_CUDA
 	for (;;) {
 		int id = 0;
 		struct pevb_cuda_surface *cusurf;
@@ -189,6 +206,7 @@ static int pevb_fops_release(struct inode *inode, struct file *filep)
 		 */
 #endif
 	}
+#endif
 
 	kfree(pevb_file);
 
@@ -203,6 +221,7 @@ static int pevb_ioctl_led(struct pevb_file *pevb_file, unsigned long arg)
 	return 0;
 }
 
+#ifndef NV_BUILD_NO_CUDA
 static int pevb_ioctl_pin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 {
 	void __user *argp = (void __user *)arg;
@@ -307,6 +326,7 @@ static int pevb_ioctl_unpin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 
 	return 0;
 }
+#endif
 
 static void pevb_userbuf_add_dma_chunk(struct pevb_userbuf *ubuf,
 	dma_addr_t addr, u64 len)
@@ -329,6 +349,7 @@ static void pevb_userbuf_add_dma_chunk(struct pevb_userbuf *ubuf,
 	ubuf->n_dmas++;
 }
 
+#ifndef NV_BUILD_NO_CUDA
 static int pevb_get_userbuf_cuda(struct pevb_file *pevb_file,
 	struct pevb_userbuf *ubuf, __u64 handle64, __u64 len, int to_dev)
 {
@@ -388,6 +409,7 @@ static int pevb_get_userbuf_cuda(struct pevb_file *pevb_file,
 
 	return 0;
 }
+#endif
 
 static int pevb_get_userbuf_pages(struct pevb *pevb, struct pevb_userbuf *ubuf,
 	__u64 src, __u64 len, int to_dev)
@@ -398,7 +420,9 @@ static int pevb_get_userbuf_pages(struct pevb *pevb, struct pevb_userbuf *ubuf,
 	int nr_pages, ret, i;
 	struct scatterlist *sg;
 
+#ifndef NV_BUILD_NO_CUDA
 	ubuf->cuda = false;
+#endif
 
 	ubuf->priv.pages.to_dev = to_dev;
 
@@ -418,6 +442,9 @@ static int pevb_get_userbuf_pages(struct pevb *pevb, struct pevb_userbuf *ubuf,
 #endif
 		start, nr_pages,
 		to_dev ? 0 : FOLL_WRITE,
+#if 0 /* CentOS 6 backport; can't be detected via kernel version */
+                0, /* force */
+#endif
 		ubuf->priv.pages.pages, NULL);
 	if (ubuf->priv.pages.pagecount != nr_pages) {
 		if (ubuf->priv.pages.pagecount < 0)
@@ -471,6 +498,7 @@ static void pevb_put_userbuf_pages(struct pevb *pevb, struct pevb_userbuf *ubuf)
 	kfree(ubuf->priv.pages.pages);
 }
 
+#ifndef NV_BUILD_NO_CUDA
 static void pevb_put_userbuf_cuda(struct pevb *pevb, struct pevb_userbuf *ubuf)
 {
 	if (ubuf->priv.cuda.map)
@@ -482,12 +510,15 @@ static void pevb_put_userbuf_cuda(struct pevb *pevb, struct pevb_userbuf *ubuf)
 		nvidia_p2p_dma_unmap_pages(ubuf->priv.cuda.map);
 #endif
 }
+#endif
 
 static void pevb_put_userbuf(struct pevb *pevb, struct pevb_userbuf *ubuf)
 {
+#ifndef NV_BUILD_NO_CUDA
 	if (ubuf->cuda)
 		pevb_put_userbuf_cuda(pevb, ubuf);
 	else
+#endif
 		pevb_put_userbuf_pages(pevb, ubuf);
 	kfree(ubuf->dmas);
 }
@@ -543,7 +574,7 @@ static int pevb_dma(struct pevb *pevb, bool c2h)
 		chan_offset = XLNX_REG(C2H, 0, H2C_CTRL) -
 			XLNX_REG(H2C, 0, H2C_CTRL);
 		irq_int_en_bit_offset =
-			XLNX_DMA_IRQ_CH_C2H_BIT(0, NUM_H2C_CHANS) -
+			XLNX_DMA_IRQ_CH_C2H_BIT(0, pevb->drvdata->num_h2c_chans) -
 			XLNX_DMA_IRQ_CH_H2C_BIT(0);
 		sgma_ctrl_bit = XLNX_DMA_SGDMA_CTRL_C2H_DSC_HALT_SHIFT;
 	} else {
@@ -624,7 +655,7 @@ static int pevb_dma(struct pevb *pevb, bool c2h)
 	return ret;
 }
 
-static int pevb_dma_h2c(struct pevb *pevb, dma_addr_t pcie_addr,
+static int pevb_dma_h2c_single(struct pevb *pevb, dma_addr_t pcie_addr,
 	unsigned long ram_offset, unsigned long len)
 {
 	struct xlnx_dma_desc *desc;
@@ -649,7 +680,7 @@ static int pevb_dma_h2c(struct pevb *pevb, dma_addr_t pcie_addr,
 	return pevb_dma(pevb, false);
 }
 
-static int pevb_dma_c2h(struct pevb *pevb, dma_addr_t pcie_addr,
+static int pevb_dma_c2h_single(struct pevb *pevb, dma_addr_t pcie_addr,
 	unsigned long ram_offset, unsigned long len)
 {
 	struct xlnx_dma_desc *desc;
@@ -674,7 +705,7 @@ static int pevb_dma_c2h(struct pevb *pevb, dma_addr_t pcie_addr,
 	return pevb_dma(pevb, true);
 }
 
-static int pevb_dma_h2c2h(struct pevb *pevb, struct pevb_userbuf *src,
+static int pevb_dma_h2c2h_multi(struct pevb *pevb, struct pevb_userbuf *src,
 	struct pevb_userbuf *dst, u64 len)
 {
 	int ret;
@@ -708,14 +739,15 @@ static int pevb_dma_h2c2h(struct pevb *pevb, struct pevb_userbuf *src,
 		}
 
 		len_chunk = min_t(u64, src_len_remaining, dst_len_remaining);
-		len_chunk = min_t(u64, len_chunk, FPGA_RAM_SIZE);
+		len_chunk = min_t(u64, len_chunk, pevb->drvdata->fpga_ram_size);
+		len_chunk = min_t(u64, len_chunk, XLNX_DMA_DESC_LEN_MAX_WORD_ALIGNED);
 		len_chunk = min_t(u64, len_chunk, overall_len_remaining);
 
-		ret = pevb_dma_h2c(pevb, src_addr, 0, len_chunk);
+		ret = pevb_dma_h2c_single(pevb, src_addr, 0, len_chunk);
 		if (ret)
 			goto unlock;
 
-		ret = pevb_dma_c2h(pevb, dst_addr, 0, len_chunk);
+		ret = pevb_dma_c2h_single(pevb, dst_addr, 0, len_chunk);
 		if (ret)
 			goto unlock;
 
@@ -734,46 +766,174 @@ unlock:
 	return ret;
 }
 
-#define VALID_FLAGS ( \
-	PICOEVB_DMA_FLAG_SRC_IS_CUDA | \
-	PICOEVB_DMA_FLAG_DST_IS_CUDA \
+static int pevb_dma_h2c_multi(struct pevb *pevb, struct pevb_userbuf *src,
+	u64 dst_offset, u64 len)
+{
+	int ret;
+	u64 overall_len_remaining = len;
+	int src_idx = -1;
+	dma_addr_t src_addr;
+	u64 src_len_remaining = 0;
+	u64 len_chunk;
+
+	if (down_interruptible(&pevb->sem))
+		return -ERESTARTSYS;
+
+	while (overall_len_remaining) {
+		if (!src_len_remaining) {
+			src_idx++;
+			if (src_idx >= src->n_dmas) {
+				ret = -EINVAL;
+				goto unlock;
+			}
+			src_addr = src->dmas[src_idx].addr;
+			src_len_remaining = src->dmas[src_idx].len;
+		}
+
+		/*
+		 * We assume the caller has verified that dst_offset/len don't
+		 * exceed FPGA RAM capacity.
+		 */
+		len_chunk = min_t(u64, src_len_remaining,
+			XLNX_DMA_DESC_LEN_MAX_WORD_ALIGNED);
+		len_chunk = min_t(u64, len_chunk, overall_len_remaining);
+
+		/*
+		 * FIXME: We should really generate a list of descriptors, and
+		 * send them to the HW all at once, to avoid IRQ latency
+		 * between transfers, when mulitple are needed. This is
+		 * possible for h2c or c2h transfers, since there's no
+		 * contention for FPGA RAM locations, unlike h2c2h transfers
+		 * where each separate transfer re-uses the RAM. However, this
+		 * makes no difference if the host has an IOMMU and hence
+		 * always presents a large contiguous mapping of the buffer.
+		 */
+		ret = pevb_dma_h2c_single(pevb, src_addr, dst_offset, len_chunk);
+		if (ret)
+			goto unlock;
+
+		overall_len_remaining -= len_chunk;
+		src_len_remaining -= len_chunk;
+		src_addr += len_chunk;
+		dst_offset += len_chunk;
+	}
+
+	ret = 0;
+
+unlock:
+	up(&pevb->sem);
+
+	return ret;
+}
+
+static int pevb_dma_c2h_multi(struct pevb *pevb, u64 src_offset,
+	struct pevb_userbuf *dst, u64 len)
+{
+	int ret;
+	u64 overall_len_remaining = len;
+	int dst_idx = -1;
+	dma_addr_t dst_addr;
+	u64 dst_len_remaining = 0;
+	u64 len_chunk;
+
+	if (down_interruptible(&pevb->sem))
+		return -ERESTARTSYS;
+
+	while (overall_len_remaining) {
+		if (!dst_len_remaining) {
+			dst_idx++;
+			if (dst_idx >= dst->n_dmas) {
+				ret = -EINVAL;
+				goto unlock;
+			}
+			dst_addr = dst->dmas[dst_idx].addr;
+			dst_len_remaining = dst->dmas[dst_idx].len;
+		}
+
+		/*
+		 * We assume the caller has verified that dst_offset/len don't
+		 * exceed FPGA RAM capacity.
+		 */
+		len_chunk = min_t(u64, dst_len_remaining,
+			XLNX_DMA_DESC_LEN_MAX_WORD_ALIGNED);
+		len_chunk = min_t(u64, len_chunk, overall_len_remaining);
+
+		/*
+		 * FIXME: We should really generate a list of descriptors, and
+		 * send them to the HW all at once, to avoid IRQ latency
+		 * between transfers, when mulitple are needed. This is
+		 * possible for h2c or c2h transfers, since there's no
+		 * contention for FPGA RAM locations, unlike h2c2h transfers
+		 * where each separate transfer re-uses the RAM. However, this
+		 * makes no difference if the host has an IOMMU and hence
+		 * always presents a large contiguous mapping of the buffer.
+		 */
+		ret = pevb_dma_c2h_single(pevb, dst_addr, src_offset, len_chunk);
+		if (ret)
+			goto unlock;
+
+		overall_len_remaining -= len_chunk;
+		dst_len_remaining -= len_chunk;
+		src_offset += len_chunk;
+		dst_addr += len_chunk;
+	}
+
+	ret = 0;
+
+unlock:
+	up(&pevb->sem);
+
+	return ret;
+}
+
+#define H2C2H_VALID_FLAGS ( \
+	PICOEVB_H2C2H_DMA_FLAG_SRC_IS_CUDA | \
+	PICOEVB_H2C2H_DMA_FLAG_DST_IS_CUDA \
 )
 
-static int pevb_ioctl_dma(struct pevb_file *pevb_file, unsigned long arg)
+static int pevb_ioctl_h2c2h_dma(struct pevb_file *pevb_file, unsigned long arg)
 {
 	struct pevb *pevb = pevb_file->pevb;
 	void __user *argp = (void __user *)arg;
-	struct picoevb_rdma_dma dma_params;
+	struct picoevb_rdma_h2c2h_dma dma_params;
 	struct pevb_userbuf src_ubuf = {0}, dst_ubuf = {0};
 	int ret;
 
 	if (copy_from_user(&dma_params, argp, sizeof(dma_params)))
 		return -EFAULT;
 
-	if (dma_params.flags & ~VALID_FLAGS)
+	if (dma_params.flags & ~H2C2H_VALID_FLAGS)
 		return -EINVAL;
 
 	mutex_lock(&pevb_file->lock);
 
-	if (dma_params.flags & PICOEVB_DMA_FLAG_SRC_IS_CUDA)
+	if (dma_params.flags & PICOEVB_H2C2H_DMA_FLAG_SRC_IS_CUDA)
+#ifndef NV_BUILD_NO_CUDA
 		ret = pevb_get_userbuf_cuda(pevb_file, &src_ubuf,
 			dma_params.src, dma_params.len, 1);
+#else
+		ret = -EINVAL;
+#endif
 	else
 		ret = pevb_get_userbuf_pages(pevb, &src_ubuf, dma_params.src,
 			dma_params.len, 1);
 	if (ret)
 		goto put_userbuf_src;
 
-	if (dma_params.flags & PICOEVB_DMA_FLAG_DST_IS_CUDA)
+	if (dma_params.flags & PICOEVB_H2C2H_DMA_FLAG_DST_IS_CUDA)
+#ifndef NV_BUILD_NO_CUDA
 		ret = pevb_get_userbuf_cuda(pevb_file, &dst_ubuf,
 			dma_params.dst, dma_params.len, 0);
+#else
+		ret = -EINVAL;
+#endif
 	else
 		ret = pevb_get_userbuf_pages(pevb, &dst_ubuf, dma_params.dst,
 			dma_params.len, 0);
 	if (ret)
 		goto put_userbuf_dst;
 
-	ret = pevb_dma_h2c2h(pevb, &src_ubuf, &dst_ubuf, dma_params.len);
+	ret = pevb_dma_h2c2h_multi(pevb, &src_ubuf, &dst_ubuf, dma_params.len);
 	if (ret)
 		goto put_userbuf_dst;
 
@@ -789,6 +949,122 @@ put_userbuf_src:
 	return ret;
 }
 
+static int pevb_ioctl_card_info(struct pevb_file *pevb_file, unsigned long arg)
+{
+	struct pevb *pevb = pevb_file->pevb;
+	void __user *argp = (void __user *)arg;
+	struct picoevb_rdma_card_info card_info_params = {0};
+	int ret;
+
+	card_info_params.fpga_ram_size = pevb->drvdata->fpga_ram_size;
+
+	ret = copy_to_user(argp, &card_info_params, sizeof(card_info_params));
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+#define H2C_VALID_FLAGS ( \
+	PICOEVB_H2C_DMA_FLAG_SRC_IS_CUDA \
+)
+
+static int pevb_ioctl_h2c_dma(struct pevb_file *pevb_file, unsigned long arg)
+{
+	struct pevb *pevb = pevb_file->pevb;
+	void __user *argp = (void __user *)arg;
+	struct picoevb_rdma_h2c_dma dma_params;
+	struct pevb_userbuf src_ubuf = {0};
+	int ret;
+
+	if (copy_from_user(&dma_params, argp, sizeof(dma_params)))
+		return -EFAULT;
+
+	if (dma_params.flags & ~H2C_VALID_FLAGS)
+		return -EINVAL;
+
+	if (dma_params.dst + dma_params.len > pevb->drvdata->fpga_ram_size)
+		return -EINVAL;
+
+	mutex_lock(&pevb_file->lock);
+
+	if (dma_params.flags & PICOEVB_H2C_DMA_FLAG_SRC_IS_CUDA)
+#ifndef NV_BUILD_NO_CUDA
+		ret = pevb_get_userbuf_cuda(pevb_file, &src_ubuf,
+			dma_params.src, dma_params.len, 1);
+#else
+		ret = -EINVAL;
+#endif
+	else
+		ret = pevb_get_userbuf_pages(pevb, &src_ubuf, dma_params.src,
+			dma_params.len, 1);
+	if (ret)
+		goto put_userbuf_src;
+
+	ret = pevb_dma_h2c_multi(pevb, &src_ubuf, dma_params.dst, dma_params.len);
+	if (ret)
+		goto put_userbuf_src;
+
+	ret = 0;
+	/* fall-through for cleanup */
+
+put_userbuf_src:
+	pevb_put_userbuf(pevb, &src_ubuf);
+	mutex_unlock(&pevb_file->lock);
+
+	return ret;
+}
+
+#define C2H_VALID_FLAGS ( \
+	PICOEVB_C2H_DMA_FLAG_DST_IS_CUDA \
+)
+
+static int pevb_ioctl_c2h_dma(struct pevb_file *pevb_file, unsigned long arg)
+{
+	struct pevb *pevb = pevb_file->pevb;
+	void __user *argp = (void __user *)arg;
+	struct picoevb_rdma_c2h_dma dma_params;
+	struct pevb_userbuf dst_ubuf = {0};
+	int ret;
+
+	if (copy_from_user(&dma_params, argp, sizeof(dma_params)))
+		return -EFAULT;
+
+	if (dma_params.flags & ~C2H_VALID_FLAGS)
+		return -EINVAL;
+
+	if (dma_params.src + dma_params.len > pevb->drvdata->fpga_ram_size)
+		return -EINVAL;
+
+	mutex_lock(&pevb_file->lock);
+
+	if (dma_params.flags & PICOEVB_C2H_DMA_FLAG_DST_IS_CUDA)
+#ifndef NV_BUILD_NO_CUDA
+		ret = pevb_get_userbuf_cuda(pevb_file, &dst_ubuf,
+			dma_params.dst, dma_params.len, 1);
+#else
+		ret = -EINVAL;
+#endif
+	else
+		ret = pevb_get_userbuf_pages(pevb, &dst_ubuf, dma_params.dst,
+			dma_params.len, 1);
+	if (ret)
+		goto put_userbuf_dst;
+
+	ret = pevb_dma_c2h_multi(pevb, dma_params.src, &dst_ubuf, dma_params.len);
+	if (ret)
+		goto put_userbuf_dst;
+
+	ret = 0;
+	/* fall-through for cleanup */
+
+put_userbuf_dst:
+	pevb_put_userbuf(pevb, &dst_ubuf);
+	mutex_unlock(&pevb_file->lock);
+
+	return ret;
+}
+
 static long pevb_fops_unlocked_ioctl(struct file *filep, unsigned int cmd,
 	unsigned long arg)
 {
@@ -797,12 +1073,20 @@ static long pevb_fops_unlocked_ioctl(struct file *filep, unsigned int cmd,
 	switch (cmd) {
 	case PICOEVB_IOC_LED:
 		return pevb_ioctl_led(pevb_file, arg);
+#ifndef NV_BUILD_NO_CUDA
 	case PICOEVB_IOC_PIN_CUDA:
 		return pevb_ioctl_pin_cuda(pevb_file, arg);
 	case PICOEVB_IOC_UNPIN_CUDA:
 		return pevb_ioctl_unpin_cuda(pevb_file, arg);
-	case PICOEVB_IOC_DMA:
-		return pevb_ioctl_dma(pevb_file, arg);
+#endif
+	case PICOEVB_IOC_H2C2H_DMA:
+		return pevb_ioctl_h2c2h_dma(pevb_file, arg);
+	case PICOEVB_IOC_CARD_INFO:
+		return pevb_ioctl_card_info(pevb_file, arg);
+	case PICOEVB_IOC_H2C_DMA:
+		return pevb_ioctl_h2c_dma(pevb_file, arg);
+	case PICOEVB_IOC_C2H_DMA:
+		return pevb_ioctl_c2h_dma(pevb_file, arg);
 	default:
 		return -EINVAL;
 	}
@@ -825,6 +1109,7 @@ static int pevb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		return -ENOMEM;
 	pci_set_drvdata(pdev, pevb);
 	pevb->pdev = pdev;
+	pevb->drvdata = (const struct pevb_drvdata *)ent->driver_data;
 
 	/*
 	 * In practice, there is a limit of FPGA_RAM_SIZE. However, since every
@@ -886,6 +1171,7 @@ static int pevb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	pevb->iomap = pcim_iomap_table(pdev);
 
 	pci_set_master(pdev);
+        pci_set_dma_mask(pdev, 0xffffffffffffffffU);
 
 	ret = request_irq(pdev->irq, pevb_irq_handler, IRQF_SHARED,
 		dev_name(&pdev->dev), pevb);
@@ -923,8 +1209,27 @@ static void pevb_shutdown(struct pci_dev *pdev)
 {
 }
 
+static const struct pevb_drvdata drvdata_picoevb = {
+	.num_h2c_chans = 1,
+	.fpga_ram_size = SZ_64K,
+};
+
+static const struct pevb_drvdata drvdata_htg_k800 = {
+	.num_h2c_chans = 1,
+	.fpga_ram_size = SZ_2G,
+};
+
+#define PCI_ENTRY(sub_dev_id, data) \
+	{ \
+		PCI_DEVICE_SUB( \
+			PCI_VENDOR_ID_NVIDIA, 0x0001, \
+			PCI_VENDOR_ID_NVIDIA, sub_dev_id), \
+	        .driver_data = (unsigned long)&drvdata_##data, \
+	}
+
 static const struct pci_device_id pevb_pci_ids[] = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_NVIDIA, 0x001), },
+	PCI_ENTRY(0x0001, picoevb),
+	PCI_ENTRY(0x0002, htg_k800),
 	{ },
 };
 MODULE_DEVICE_TABLE(pci, pevb_pci_ids);

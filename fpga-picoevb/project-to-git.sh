@@ -30,4 +30,4 @@ if [ ! -x "$(which ${vivado})" ]; then
 fi
 
 cd vivado-project
-"${vivado}" -nojournal -nolog -mode batch -source ../generate-cfgmem.tcl
+"${vivado}" -nojournal -nolog -mode batch -source ../project-to-git.tcl vivado-project.xpr

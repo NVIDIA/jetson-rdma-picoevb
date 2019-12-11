@@ -1,0 +1,8 @@
+.Xil/
+htg-k800.mcs
+htg-k800.prm
+vivado*.jou
+vivado*.log
+vivado*.str
+vivado-project/
+vivado-project.srcs/

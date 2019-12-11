@@ -1,3 +1,5 @@
 rdma-cuda
 rdma-malloc
+rdma-malloc-c2h-perf
+rdma-malloc-h2c-perf
 set-leds

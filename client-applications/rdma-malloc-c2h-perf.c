@@ -28,22 +28,21 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include "../kernel-module/picoevb-rdma-ioctl.h"
 
-#define SURFACE_W	1024
-#define SURFACE_H	1024
-#define SURFACE_SIZE	(SURFACE_W * SURFACE_H)
-
-#define OFFSET(x, y)	(((y) * SURFACE_W) + x)
-#define DATA(x, y)	(((y & 0xffff) << 16) | ((x) & 0xffff))
+#define MAX_TRANSFER_SIZE (100 * 1024 * 1024)
 
 int main(int argc, char **argv)
 {
-	uint32_t *src, *dst;
-	uint32_t y, x;
 	int fd, ret;
-	struct picoevb_rdma_h2c2h_dma dma_params;
+	struct picoevb_rdma_card_info card_info;
+	uint64_t transfer_size;
+	void *dst;
+	struct picoevb_rdma_c2h_dma dma_params;
+	struct timeval  tvs, tve;
+	uint64_t tdelta_us;
 
 	if (argc != 1) {
 		fprintf(stderr, "usage: rdma-malloc\n");
@@ -56,57 +55,39 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	src = malloc(SURFACE_SIZE * sizeof(*src));
-	if (!src) {
-		fprintf(stderr, "malloc(src) failed\n");
+	ret = ioctl(fd, PICOEVB_IOC_CARD_INFO, &card_info);
+	if (ret != 0) {
+		fprintf(stderr, "ioctl(CARD_INFO) failed: %d\n", ret);
+		perror("ioctl() failed");
 		return 1;
 	}
+	transfer_size = card_info.fpga_ram_size;
+	if (transfer_size > MAX_TRANSFER_SIZE)
+		transfer_size = MAX_TRANSFER_SIZE;
 
-	dst = malloc(SURFACE_SIZE * sizeof(*dst));
+	dst = calloc(transfer_size, 1);
 	if (!dst) {
 		fprintf(stderr, "malloc(dst) failed\n");
 		return 1;
 	}
 
-	for (y = 0; y < SURFACE_H; y++) {
-		for (x = 0; x < SURFACE_W; x++) {
-			uint32_t expected = DATA(x, y);
-			uint32_t offset = OFFSET(x, y);
-			src[offset] = expected;
-			dst[offset] = ~expected;
-		}
-	}
-
-	dma_params.src = (__u64)src;
+	dma_params.src = 0;
 	dma_params.dst = (__u64)dst;
-	dma_params.len = SURFACE_SIZE * sizeof(*src);
+	dma_params.len = transfer_size;
 	dma_params.flags = 0;
-	ret = ioctl(fd, PICOEVB_IOC_H2C2H_DMA, &dma_params);
+	gettimeofday(&tvs, NULL);
+	ret = ioctl(fd, PICOEVB_IOC_C2H_DMA, &dma_params);
+	gettimeofday(&tve, NULL);
 	if (ret != 0) {
-		fprintf(stderr, "ioctl() failed: %d\n", ret);
+		fprintf(stderr, "ioctl(DMA) failed: %d\n", ret);
 		perror("ioctl() failed");
 		return 1;
 	}
 
-	ret = 0;
-	for (y = 0; y < SURFACE_H; y++) {
-		for (x = 0; x < SURFACE_W; x++) {
-			uint32_t expected = DATA(x, y);
-			uint32_t offset = OFFSET(x, y);
-			uint32_t actual = dst[offset];
-			if (actual != expected) {
-				fprintf(stderr,
-					"dst[0x%x] is 0x%x not 0x%x\n",
-					offset, actual, expected);
-				ret = 1;
-			}
-		}
-	}
-	if (ret)
-		return 1;
+	tdelta_us = ((tve.tv_sec - tvs.tv_sec) * 1000000) + tve.tv_usec - tvs.tv_usec;
+	printf("Bytes:%lu usecs:%lu MB/s:%lf\n", transfer_size, tdelta_us, (double)transfer_size / (double)tdelta_us);
 
 	free(dst);
-	free(src);
 
 	ret = close(fd);
 	if (ret < 0) {

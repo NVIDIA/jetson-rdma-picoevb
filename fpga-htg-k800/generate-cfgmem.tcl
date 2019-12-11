@@ -17,39 +17,13 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
+#
+# Derived from README.md in PicoEVB sample project
 
-CC ?= $(CROSS_COMPILE)gcc
-ifeq ($(CUDA_TOOLKIT),)
-	CUDA_TOOLKIT := $(wildcard /usr/local/cuda-10.1)
-endif
-ifeq ($(CUDA_TOOLKIT),)
-	CUDA_TOOLKIT := $(wildcard /usr/local/cuda-10.0)
-endif
-NVCC ?= $(CUDA_TOOLKIT)/bin/nvcc
-
-CFLAGS := \
-	-ggdb
-ifdef NV_BUILD_DGPU
-	CFLAGS += \
-		-DNV_BUILD_DGPU
-endif
-
-TARGETS :=
-TARGETS += rdma-cuda
-TARGETS += rdma-malloc
-TARGETS += rdma-malloc-h2c-perf
-TARGETS += rdma-malloc-c2h-perf
-TARGETS += set-leds
-default: $(TARGETS)
-
-rdma-cuda: rdma-cuda.cu ../kernel-module/picoevb-rdma-ioctl.h Makefile
-	$(NVCC) $(addprefix -Xcompiler ,$(CFLAGS)) -o $@ $< -l cuda
-
-rdma-malloc%: rdma-malloc%.c ../kernel-module/picoevb-rdma-ioctl.h Makefile
-	$(CC) $(CFLAGS) -o $@ $<
-
-set-leds: set-leds.c ../kernel-module/picoevb-rdma-ioctl.h Makefile
-	$(CC) $(CFLAGS) -o $@ $<
-
-clean:
-	rm -f $(TARGETS)
+write_cfgmem \
+    -force \
+    -format mcs \
+    -size 64 \
+    -interface SPIx4 \
+    -loadbit {up 0x00000000 "./vivado-project.runs/impl_1/top.bit" } \
+    -file "../htg-k800.mcs"

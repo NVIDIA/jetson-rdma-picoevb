@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 	int fd, ret;
 	unsigned int flag = 1;
 	struct picoevb_rdma_pin_cuda pin_params_src, pin_params_dst;
-	struct picoevb_rdma_dma dma_params;
+	struct picoevb_rdma_h2c2h_dma dma_params;
 	struct picoevb_rdma_unpin_cuda unpin_params_src, unpin_params_dst;
 
 	if (argc != 1) {
@@ -144,9 +144,9 @@ int main(int argc, char **argv)
 	dma_params.src = pin_params_src.handle;
 	dma_params.dst = pin_params_dst.handle;
 	dma_params.len = SURFACE_SIZE * sizeof(*src_d);
-	dma_params.flags = PICOEVB_DMA_FLAG_SRC_IS_CUDA |
-		PICOEVB_DMA_FLAG_DST_IS_CUDA;
-	ret = ioctl(fd, PICOEVB_IOC_DMA, &dma_params);
+	dma_params.flags = PICOEVB_H2C2H_DMA_FLAG_SRC_IS_CUDA |
+		PICOEVB_H2C2H_DMA_FLAG_DST_IS_CUDA;
+	ret = ioctl(fd, PICOEVB_IOC_H2C2H_DMA, &dma_params);
 	if (ret != 0) {
 		fprintf(stderr, "ioctl(DMA) failed: %d\n", ret);
 		return 1;

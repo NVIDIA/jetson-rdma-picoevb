@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
@@ -20,13 +18,8 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-set -e
-
-cd "$(dirname "${0}")"
-
-vivado=vivado
-if [ ! -x "$(which ${vivado})" ]; then
-    vivado=~/Xilinx/Vivado/2018.3/bin/vivado
-fi
-
-"${vivado}" -nojournal -nolog -mode batch -source program-fpga.tcl
+cd [get_property DIRECTORY [current_project]]
+reset_project -exclude_ips
+update_compile_order -fileset sources_1
+launch_runs impl_1 -to_step write_bitstream -jobs 6
+wait_on_run impl_1
