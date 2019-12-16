@@ -19,5 +19,15 @@
 # DEALINGS IN THE SOFTWARE.
 
 cd [get_property DIRECTORY [current_project]]
-write_ip_tcl -force [get_ips *] ../git-to-ips.tcl
-write_project_tcl -force -no_copy_sources -use_bd_files ../git-to-project.tcl
+write_ip_tcl \
+  -force \
+  [get_ips *] \
+  ../git-to-ips.tcl
+write_project_tcl \
+  -force \
+  -no_copy_sources \
+  -use_bd_files \
+  -paths_relative_to [get_property DIRECTORY [current_project]] \
+  -origin_dir_override . \
+  -target_proj_dir . \
+  ../git-to-project.tcl

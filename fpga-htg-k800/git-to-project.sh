@@ -29,41 +29,12 @@ if [ ! -x "$(which ${vivado})" ]; then
     vivado=~/Xilinx/Vivado/2018.3/bin/vivado
 fi
 
-rm -rf vivado-project.srcs
-rm -rf vivado-project
+rm -rf vivado-project.srcs/
+rm -rf vivado-project/
 "${vivado}" -nojournal -nolog -mode batch -source git-to-ips.tcl
+mv vivado-project/vivado-project.srcs/ vivado-project.srcs/
+rm -rf vivado-project/
+mkdir -p vivado-project/
+cd vivado-project/
+"${vivado}" -nojournal -nolog -mode batch -source ../git-to-project.tcl
 
-# In theory, the following should work instead of all the mkdir/mv below,
-# but that generates synthesis errors:-(
-# mv vivado-project/vivado-project.srcs vivado-project.srcs
-
-mkdir -p vivado-project.srcs/sources_1/ip/axi_gpio_0/
-mv vivado-project/vivado-project.srcs/sources_1/ip/axi_gpio_0/axi_gpio_0.xci \
-   vivado-project.srcs/sources_1/ip/axi_gpio_0/axi_gpio_0.xci
-
-mkdir -p vivado-project.srcs/sources_1/ip/axi_gpio_1/
-mv vivado-project/vivado-project.srcs/sources_1/ip/axi_gpio_1/axi_gpio_1.xci \
-   vivado-project.srcs/sources_1/ip/axi_gpio_1/axi_gpio_1.xci
-
-mkdir -p vivado-project.srcs/sources_1/ip/axi_crossbar_0/
-mv vivado-project/vivado-project.srcs/sources_1/ip/axi_crossbar_0/axi_crossbar_0.xci \
-   vivado-project.srcs/sources_1/ip/axi_crossbar_0/axi_crossbar_0.xci
-
-mkdir -p vivado-project.srcs/sources_1/ip/axi_clock_converter_0/
-mv vivado-project/vivado-project.srcs/sources_1/ip/axi_clock_converter_0/axi_clock_converter_0.xci \
-   vivado-project.srcs/sources_1/ip/axi_clock_converter_0/axi_clock_converter_0.xci
-
-mkdir -p vivado-project.srcs/sources_1/ip/proc_sys_reset_0/
-mv vivado-project/vivado-project.srcs/sources_1/ip/proc_sys_reset_0/proc_sys_reset_0.xci \
-   vivado-project.srcs/sources_1/ip/proc_sys_reset_0/proc_sys_reset_0.xci
-
-mkdir -p vivado-project.srcs/sources_1/ip/ddr4_0/
-mv vivado-project/vivado-project.srcs/sources_1/ip/ddr4_0/ddr4_0.xci \
-   vivado-project.srcs/sources_1/ip/ddr4_0/ddr4_0.xci
-
-mkdir -p vivado-project.srcs/sources_1/ip/xdma_0/
-mv vivado-project/vivado-project.srcs/sources_1/ip/xdma_0/xdma_0.xci \
-   vivado-project.srcs/sources_1/ip/xdma_0/xdma_0.xci
-
-rm -rf vivado-project
-"${vivado}" -nojournal -nolog -mode batch -source git-to-project.tcl
