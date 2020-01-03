@@ -208,6 +208,7 @@ static int pevb_ioctl_pin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 	void __user *argp = (void __user *)arg;
 	struct picoevb_rdma_pin_cuda pin_params;
 	struct pevb_cuda_surface *cusurf;
+	u64 aligned_len;
 	int ret;
 
 	if (copy_from_user(&pin_params, argp, sizeof(pin_params)))
@@ -221,12 +222,14 @@ static int pevb_ioctl_pin_cuda(struct pevb_file *pevb_file, unsigned long arg)
 	cusurf->va = pin_params.va & GPU_PAGE_MASK;
 	cusurf->offset = pin_params.va & GPU_PAGE_OFFSET;
 	cusurf->len = pin_params.size;
+	aligned_len = (cusurf->offset + cusurf->len + GPU_PAGE_SIZE - 1) &
+		GPU_PAGE_MASK;
 
 	ret = nvidia_p2p_get_pages(
 #ifdef NV_BUILD_DGPU
 		0, 0,
 #endif
-		cusurf->va, cusurf->offset + cusurf->len, &cusurf->page_table,
+		cusurf->va, aligned_len, &cusurf->page_table,
 		pevb_p2p_free_callback, cusurf);
 	if (ret < 0) {
 		kfree(cusurf);
@@ -706,6 +709,7 @@ static int pevb_dma_h2c2h(struct pevb *pevb, struct pevb_userbuf *src,
 
 		len_chunk = min_t(u64, src_len_remaining, dst_len_remaining);
 		len_chunk = min_t(u64, len_chunk, FPGA_RAM_SIZE);
+		len_chunk = min_t(u64, len_chunk, overall_len_remaining);
 
 		ret = pevb_dma_h2c(pevb, src_addr, 0, len_chunk);
 		if (ret)

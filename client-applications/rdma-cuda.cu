@@ -124,6 +124,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#if (SURFACE_W < 16) || (SURFACE_H < 16)
+#error Grid and block sizes must be shrunk for small surfaces
+#endif
+#if (SURFACE_W & 15) || (SURFACE_H & 15)
+#error Grid and block sizes are not a multiple of the surface size
+#endif
 	dim3 dimGrid(SURFACE_W / 16, SURFACE_H / 16);
 	dim3 dimBlock(16, 16);
 	fill_surface<<<dimGrid, dimBlock>>>(src_d, 0);
