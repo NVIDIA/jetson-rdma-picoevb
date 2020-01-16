@@ -604,6 +604,10 @@ static int pevb_dma(struct pevb *pevb, bool c2h)
 	reg = XLNX_REG(IRQ, 0, IRQ_CH_INT_EN_W1S);
 	val = XLNX_DMA_IRQ_CH_H2C_BIT(irq_int_en_bit_offset);
 	pevb_writel(pevb, BAR_DMA, val, reg);
+	/* Arm perf counters */
+	reg = XLNX_REG(H2C, 0, H2C_PERF_CTRL) + chan_offset;
+	val = XLNX_DMA_H2C_PERF_CTRL_RUN | XLNX_DMA_H2C_PERF_CTRL_AUTO_STOP;
+	pevb_writel(pevb, BAR_DMA, val, reg);
 	/* Start DMA */
 	reg = XLNX_REG(H2C, 0, H2C_CTRL) + chan_offset;
 	val = (XLNX_DMA_H2C_CTRL_IE_DESC_ERR_MASK <<
@@ -652,6 +656,19 @@ static int pevb_dma(struct pevb *pevb, bool c2h)
 	/* Cancel channel operation */
 	reg = XLNX_REG(H2C, 0, H2C_CTRL) + chan_offset;
 	pevb_writel(pevb, BAR_DMA, 0, reg);
+	/* Dump performance counters */
+	reg = XLNX_REG(H2C, 0, H2C_PERF_CYC_HIGH) + chan_offset;
+	val = pevb_readl(pevb, BAR_DMA, reg);
+	dev_dbg(&pevb->pdev->dev, "CYC_HIGH 0x%08x\n", val);
+	reg = XLNX_REG(H2C, 0, H2C_PERF_CYC_LOW) + chan_offset;
+	val = pevb_readl(pevb, BAR_DMA, reg);
+	dev_dbg(&pevb->pdev->dev, "CYC_LOW  0x%08x\n", val);
+	reg = XLNX_REG(H2C, 0, H2C_PERF_DAT_HIGH) + chan_offset;
+	val = pevb_readl(pevb, BAR_DMA, reg);
+	dev_dbg(&pevb->pdev->dev, "DAT_HIGH 0x%08x\n", val);
+	reg = XLNX_REG(H2C, 0, H2C_PERF_DAT_LOW) + chan_offset;
+	val = pevb_readl(pevb, BAR_DMA, reg);
+	dev_dbg(&pevb->pdev->dev, "DAT_LOW  0x%08x\n", val);
 
 	return ret;
 }

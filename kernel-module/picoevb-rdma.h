@@ -126,6 +126,18 @@ struct xlnx_dma_desc {
 
 #define XLNX_DMA_H2C_INT_EN_W1C			0x98
 
+#define XLNX_DMA_H2C_PERF_CTRL			0xc0
+#define XLNX_DMA_H2C_PERF_CTRL_RUN		BIT(2)
+#define XLNX_DMA_H2C_PERF_CTRL_AUTO_STOP	BIT(0)
+
+#define XLNX_DMA_H2C_PERF_CYC_LOW		0xc4
+
+#define XLNX_DMA_H2C_PERF_CYC_HIGH		0xc8
+
+#define XLNX_DMA_H2C_PERF_DAT_LOW		0xcc
+
+#define XLNX_DMA_H2C_PERF_DAT_HIGH		0xd0
+
 /* IRQ block */
 
 #define XLNX_DMA_IRQ_ID				0x00
