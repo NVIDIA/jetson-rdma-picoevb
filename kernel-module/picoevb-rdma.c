@@ -916,6 +916,7 @@ static int pevb_ioctl_h2c2h_dma(struct pevb_file *pevb_file, unsigned long arg)
 	struct picoevb_rdma_h2c2h_dma dma_params;
 	struct pevb_userbuf src_ubuf = {0}, dst_ubuf = {0};
 	int ret;
+	u64 ts, te;
 
 	if (copy_from_user(&dma_params, argp, sizeof(dma_params)))
 		return -EFAULT;
@@ -951,11 +952,15 @@ static int pevb_ioctl_h2c2h_dma(struct pevb_file *pevb_file, unsigned long arg)
 	if (ret)
 		goto put_userbuf_dst;
 
+	ts = ktime_get_ns();
 	ret = pevb_dma_h2c2h_multi(pevb, &src_ubuf, &dst_ubuf, dma_params.len);
+	te = ktime_get_ns();
 	if (ret)
 		goto put_userbuf_dst;
 
-	ret = 0;
+	dma_params.dma_time_ns = te - ts;
+	ret = copy_to_user(argp, &dma_params, sizeof(dma_params));
+
 	/* fall-through for cleanup */
 
 put_userbuf_dst:
@@ -994,6 +999,7 @@ static int pevb_ioctl_h2c_dma(struct pevb_file *pevb_file, unsigned long arg)
 	struct picoevb_rdma_h2c_dma dma_params;
 	struct pevb_userbuf src_ubuf = {0};
 	int ret;
+	u64 ts, te;
 
 	if (copy_from_user(&dma_params, argp, sizeof(dma_params)))
 		return -EFAULT;
@@ -1019,11 +1025,15 @@ static int pevb_ioctl_h2c_dma(struct pevb_file *pevb_file, unsigned long arg)
 	if (ret)
 		goto put_userbuf_src;
 
+	ts = ktime_get_ns();
 	ret = pevb_dma_h2c_multi(pevb, &src_ubuf, dma_params.dst, dma_params.len);
+	te = ktime_get_ns();
 	if (ret)
 		goto put_userbuf_src;
 
-	ret = 0;
+	dma_params.dma_time_ns = te - ts;
+	ret = copy_to_user(argp, &dma_params, sizeof(dma_params));
+
 	/* fall-through for cleanup */
 
 put_userbuf_src:
@@ -1044,6 +1054,7 @@ static int pevb_ioctl_c2h_dma(struct pevb_file *pevb_file, unsigned long arg)
 	struct picoevb_rdma_c2h_dma dma_params;
 	struct pevb_userbuf dst_ubuf = {0};
 	int ret;
+	u64 ts, te;
 
 	if (copy_from_user(&dma_params, argp, sizeof(dma_params)))
 		return -EFAULT;
@@ -1069,11 +1080,15 @@ static int pevb_ioctl_c2h_dma(struct pevb_file *pevb_file, unsigned long arg)
 	if (ret)
 		goto put_userbuf_dst;
 
+	ts = ktime_get_ns();
 	ret = pevb_dma_c2h_multi(pevb, dma_params.src, &dst_ubuf, dma_params.len);
+	te = ktime_get_ns();
 	if (ret)
 		goto put_userbuf_dst;
 
-	ret = 0;
+	dma_params.dma_time_ns = te - ts;
+	ret = copy_to_user(argp, &dma_params, sizeof(dma_params));
+
 	/* fall-through for cleanup */
 
 put_userbuf_dst:

@@ -28,7 +28,6 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include "../kernel-module/picoevb-rdma-ioctl.h"
 
@@ -41,7 +40,6 @@ int main(int argc, char **argv)
 	uint64_t transfer_size;
 	void *src;
 	struct picoevb_rdma_h2c_dma dma_params;
-	struct timeval  tvs, tve;
 	uint64_t tdelta_us;
 
 	if (argc != 1) {
@@ -75,16 +73,14 @@ int main(int argc, char **argv)
 	dma_params.dst = 0;
 	dma_params.len = transfer_size;
 	dma_params.flags = 0;
-	gettimeofday(&tvs, NULL);
 	ret = ioctl(fd, PICOEVB_IOC_H2C_DMA, &dma_params);
-	gettimeofday(&tve, NULL);
 	if (ret != 0) {
 		fprintf(stderr, "ioctl(DMA) failed: %d\n", ret);
 		perror("ioctl() failed");
 		return 1;
 	}
 
-	tdelta_us = ((tve.tv_sec - tvs.tv_sec) * 1000000) + tve.tv_usec - tvs.tv_usec;
+	tdelta_us = dma_params.dma_time_ns / 1000;
 	printf("Bytes:%lu usecs:%lu MB/s:%lf\n", transfer_size, tdelta_us, (double)transfer_size / (double)tdelta_us);
 
 	free(src);
