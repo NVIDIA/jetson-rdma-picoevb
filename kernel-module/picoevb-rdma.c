@@ -630,7 +630,8 @@ static int pevb_dma(struct pevb *pevb, bool c2h)
 	if (ret)
 		dev_err(&pevb->pdev->dev, "DMA interrupted\n");
 	else {
-		if (pevb->h2c_error) {
+		val = c2h ? pevb->c2h_error : pevb->h2c_error;
+		if (val) {
 			dev_err(&pevb->pdev->dev, "DMA failed\n");
 			ret = -EIO;
 		}
