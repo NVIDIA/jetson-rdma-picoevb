@@ -20,6 +20,9 @@
 
 CC ?= $(CROSS_COMPILE)gcc
 ifeq ($(CUDA_TOOLKIT),)
+	CUDA_TOOLKIT := $(wildcard /usr/local/cuda)
+endif
+ifeq ($(CUDA_TOOLKIT),)
 	CUDA_TOOLKIT := $(wildcard /usr/local/cuda-10.1)
 endif
 ifeq ($(CUDA_TOOLKIT),)
