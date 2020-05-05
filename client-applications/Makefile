@@ -39,13 +39,15 @@ endif
 
 TARGETS :=
 TARGETS += rdma-cuda
+TARGETS += rdma-cuda-c2h-perf
+TARGETS += rdma-cuda-h2c-perf
 TARGETS += rdma-malloc
-TARGETS += rdma-malloc-h2c-perf
 TARGETS += rdma-malloc-c2h-perf
+TARGETS += rdma-malloc-h2c-perf
 TARGETS += set-leds
 default: $(TARGETS)
 
-rdma-cuda: rdma-cuda.cu ../kernel-module/picoevb-rdma-ioctl.h Makefile
+%: %.cu ../kernel-module/picoevb-rdma-ioctl.h Makefile
 	$(NVCC) $(addprefix -Xcompiler ,$(CFLAGS)) -o $@ $< -l cuda
 
 rdma-malloc%: rdma-malloc%.c ../kernel-module/picoevb-rdma-ioctl.h Makefile

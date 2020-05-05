@@ -341,12 +341,15 @@ memory size of the PicoEVB board's FPGA, and likely would not apply in a
 production device.
 
 Separate test applications exist to exercise the uni-directional copy feature
-of the kernel driver, and to report transfer performance. To run these tests,
-execute:
+of the kernel driver, and to report transfer performance. Two versions of the
+tests exist; one using `malloc()`'d memory on the host, and the other using
+memory allocated via CUDA. To run these tests, execute:
 
 ```
 sudo ./rdma-malloc-h2c-perf
 sudo ./rdma-malloc-c2h-perf
+sudo ./rdma-cuda-h2c-perf
+sudo ./rdma-cuda-c2h-perf
 ```
 
 ### set-leds
