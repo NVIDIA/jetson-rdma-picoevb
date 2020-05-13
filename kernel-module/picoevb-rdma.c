@@ -1076,7 +1076,7 @@ static int pevb_ioctl_c2h_dma(struct pevb_file *pevb_file, unsigned long arg)
 #endif
 	else
 		ret = pevb_get_userbuf_pages(pevb, &dst_ubuf, dma_params.dst,
-			dma_params.len, 1);
+			dma_params.len, 0);
 	if (ret)
 		goto put_userbuf_dst;
 
