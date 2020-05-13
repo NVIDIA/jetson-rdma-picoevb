@@ -1070,13 +1070,13 @@ static int pevb_ioctl_c2h_dma(struct pevb_file *pevb_file, unsigned long arg)
 	if (dma_params.flags & PICOEVB_C2H_DMA_FLAG_DST_IS_CUDA)
 #ifndef NV_BUILD_NO_CUDA
 		ret = pevb_get_userbuf_cuda(pevb_file, &dst_ubuf,
-			dma_params.dst, dma_params.len, 1);
+			dma_params.dst, dma_params.len, 0);
 #else
 		ret = -EINVAL;
 #endif
 	else
 		ret = pevb_get_userbuf_pages(pevb, &dst_ubuf, dma_params.dst,
-			dma_params.len, 1);
+			dma_params.len, 0);
 	if (ret)
 		goto put_userbuf_dst;
 
