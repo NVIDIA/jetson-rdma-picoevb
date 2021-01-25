@@ -1279,7 +1279,7 @@ static int __init pevb_init(void)
 {
 	int ret;
 
-	pevb_class = class_create(THIS_MODULE, "chardrv");
+	pevb_class = class_create(THIS_MODULE, "picoevb");
 	if (!pevb_class)
 		return -ENOMEM;
 
