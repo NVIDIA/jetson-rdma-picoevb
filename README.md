@@ -4,8 +4,9 @@ This repository provides a minimal hardware-based demonstration of GPUDirect
 RDMA. This feature allows a PCIe device to directly access CUDA memory, thus
 allowing zero-copy sharing of data between CUDA and a PCIe device.
 
-The code supports both:
+The code supports:
 * NVIDIA Jetson AGX Xavier (Jetson) running Linux for Tegra (L4T).
+* NVIDIA Drive AGX Xavier running Embedded Linux.
 * A PC running the NVIDIA CUDA drivers and containing a Quadro or Tesla GPU.
 
 A graphical representation of the system configuration created by the software
@@ -59,9 +60,17 @@ Jetson's M.2 key E connector:
 * Mini-PCIe to M.2 2230 adapter board. This may be available from Amazon as
   ASIN B07D4FCD1K, product name "HLT M.2 (NGFF) to mPCIe (PCIe+USB) Adapter".
 
-The set of available adapters and vendors on Amazon is very variable over time.
-Some searching may be required to locate suitable adapters, from either Amazon
-or alternative websites.
+The following adapter may be used to connect the PicoEVB board to Drive AGX
+Xavier's M.2 key M connector:
+
+* M.2 KEY-M interface to M.2 KEY A-E or KEY E interface adapter. This may be
+  available from AliExpress with product name as "M.2 Wifi Adapter M.2 M Key
+  to A+E Key Slot Wifi Bluetooth Network Card NGFF NVMe PCI express SSD Port
+  to E key Slot Wifi Adapter".
+
+The set of available adapters and vendors is very variable over time. Some
+searching may be required to locate suitable adapters, from either Amazon or
+alternative websites.
 
 ### HiTech Global HTG-K800
 
@@ -104,6 +113,11 @@ not need it.
 
 This software must run on the system that the PicoEVB FPGA card is plugged
 into. This may be either an x86 Linux PC, or a Jetson system.
+
+Note that Drive AGX Xavier's M.2 slot does support USB. Consequently, it is not
+possible to program the FPGA when attached to this connector. The PicoEVB board
+can be programmed on Linux PC or Jetson system instead, then connected to Drive
+AGX Xavier once programmed.
 
 Vivado relies upon a piece of software known as xvcd (Xilinx Virtual Cable
 Daemon) to communicate with the PicoEVB board for programming purposes.
@@ -192,25 +206,26 @@ but is actually running.
 
 # Linux Kernel Driver
 
-## Building on Jetson, to Run on Jetson
+## Building on Jetson/Drive AGX Xavier, to Run on Jetson/Drive AGX Xavier
 
-To build the Linux kernel driver on Jetson, execute:
+To build the Linux kernel driver, execute:
 
 ```
 sudo apt update
 sudo apt install build-essential bc
 cd /path/to/this/project/kernel-module/
-./build-for-jetson-igpu-native.sh
+./build-for-jetson-drive-igpu-native.sh
 ```
 
 This will generate `picoevb-rdma.ko`.
 
-## Building on an x86 Linux PC, to Run on Jetson
+## Building on an x86 Linux PC, to Run on Jetson/Drive AGX Xavier
 
 The Linux kernel driver may alternatively be built (cross-compiled) on an x86
 Linux PC. You will first need to obtain a copy of the "Linux headers" or
 "kernel external module build tree" files from L4T; these may be found in
-`/usr/src/` on Jetson, or obtained from the L4T downloads website.
+`/usr/src/` on Jetson/Drive AGX Xavier, or obtained from the L4T/Drive
+downloads website.
 
 To build the Linux kernel driver on a x86 Linux PC, execute:
 
@@ -220,10 +235,11 @@ sudo apt install build-essential bc
 cd /path/to/this/project/kernel-module/
 # Adjust the KDIR value to match the exact path in your copy of the
 # kernel headers
-KDIR=/path/to/linux-headers-4.9.140-tegra-linux_x86_64/kernel-4.9/ ./build-for-jetson-igpu-on-pc.sh
+KDIR=/path/to/linux-headers-4.9.140-tegra-linux_x86_64/kernel-4.9/ ./build-for-jetson-drive-igpu-on-pc.sh
 ```
 
-This will generate `picoevb-rdma.ko`. This file must be copied to Jetson.
+This will generate `picoevb-rdma.ko`. This file must be copied to Jetson/Drive
+AGX Xavier.
 
 ## Building on an x86 Linux PC, to Run on That PC
 
@@ -261,19 +277,19 @@ $ lspci -v
 
 # User-space Applications
 
-## Building on Jetson, to Run on Jetson
+## Building on Jetson/Drive AGX Xavier, to Run on Jetson/Drive AGX Xavier
 
-The client applications are best built on Jetson itself. Make sure you have the
-CUDA development tools installed, and execute:
+The client applications are best built on Jetson/Drive AGX Xavier itself. Make
+sure you have the CUDA development tools installed, and execute:
 
 ```
 sudo apt update
 sudo apt install build-essential bc
 cd /path/to/this/project/client-applications/
-./build-for-jetson-igpu-native.sh
+./build-for-jetson-drive-igpu-native.sh
 ```
 
-## Building on an x86 Linux PC, to Run on Jetson
+## Building on an x86 Linux PC, to Run on Jetson/Drive AGX Xavier
 
 Building (cross-compiling) the client applications on a x86 Linux PC is only
 partially supported; the makefile does not yet support cross-compiling the CUDA
@@ -284,12 +300,12 @@ executing:
 sudo apt update
 sudo apt install build-essential bc
 cd /path/to/this/project/client-applications/
-./build-for-jetson-igpu-on-pc.sh
+./build-for-jetson-drive-igpu-on-pc.sh
 ```
 
 You may need to adjust the value of variable `CROSS_COMPILE` in script
-`./build-for-jetson-igpu-on-pc.sh` to match the configuration of your x86 Linux
-PC.
+`./build-for-jetson-drive-igpu-on-pc.sh` to match the configuration of your x86
+Linux PC.
 
 ## Building on an x86 Linux PC, to Run on That PC
 
@@ -308,8 +324,8 @@ cd /path/to/this/project/client-applications/
 
 Two PCIe data access tests are provided; `rdma-malloc` and `rdma-cuda`. Both
 tests are structurally identical, but allocate memory using different APIs; the
-former using `malloc()`, and the latter via `cudaHostAlloc()` (Jetson) or
-`cudaMalloc()` (PC).
+former using `malloc()`, and the latter via `cudaHostAlloc()` (Jetson/Drive AGX
+Xavier) or `cudaMalloc()` (PC).
 
 Both tests proceed as following:
 
