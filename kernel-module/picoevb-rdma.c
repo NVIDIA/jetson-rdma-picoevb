@@ -1298,5 +1298,5 @@ static void __exit pevb_exit(void)
 }
 module_exit(pevb_exit);
 
-MODULE_AUTHOR("Stephen Warren <swerren@nvidia.com>");
+MODULE_AUTHOR("Stephen Warren <swarren@nvidia.com>");
 MODULE_LICENSE("GPL v2");
