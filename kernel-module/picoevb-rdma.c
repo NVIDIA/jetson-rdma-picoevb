@@ -1298,5 +1298,11 @@ static void __exit pevb_exit(void)
 }
 module_exit(pevb_exit);
 
-MODULE_AUTHOR("Stephen Warren <swarren@nvidia.com>");
+/*
+ * For questions, comments, or support, visit:
+ *     http://developer.nvidia.com/embedded-computing
+ * To report specific verified bugs, visit:
+ *     https://github.com/NVIDIA/jetson-rdma-picoevb/issues
+ */
+MODULE_AUTHOR("NVIDIA");
 MODULE_LICENSE("GPL v2");
