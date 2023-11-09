@@ -166,7 +166,6 @@ static void pevb_p2p_free_callback(void *data)
 	mutex_unlock(&pevb_file->lock);
 
 	nvidia_p2p_free_page_table(cusurf->page_table);
-	kfree(cusurf->page_table);
 	kfree(cusurf);
 }
 #endif
