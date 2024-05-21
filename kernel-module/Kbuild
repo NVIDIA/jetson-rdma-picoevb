@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms and conditions of the GNU General Public License,
@@ -13,6 +13,9 @@ ifdef NV_BUILD_DGPU
 	KBUILD_CFLAGS += \
 		-I$(NVIDIA_SRC_DIR) \
 		-DNV_BUILD_DGPU
+else
+	KBUILD_EXTRA_SYMBOLS=/usr/src/nvidia/nvidia-oot/Module.symvers
+	ccflags-y += -I/usr/src/nvidia/nvidia-oot/include/
 endif
 
 ifdef NV_BUILD_NO_CUDA
