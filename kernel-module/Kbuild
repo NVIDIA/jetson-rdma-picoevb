@@ -13,6 +13,7 @@ ifdef NV_BUILD_DGPU
 	KBUILD_CFLAGS += \
 		-I$(NVIDIA_SRC_DIR) \
 		-DNV_BUILD_DGPU
+	KBUILD_EXTRA_SYMBOLS=/usr/src/nvidia-535.171.04/Module.symvers
 else
 	KBUILD_EXTRA_SYMBOLS=/usr/src/nvidia/nvidia-oot/Module.symvers
 	ccflags-y += -I/usr/src/nvidia/nvidia-oot/include/
