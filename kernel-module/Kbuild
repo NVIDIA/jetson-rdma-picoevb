@@ -15,13 +15,8 @@ ifdef NV_BUILD_DGPU
 		-DNV_BUILD_DGPU
 	KBUILD_EXTRA_SYMBOLS=/usr/src/nvidia-535.171.04/Module.symvers
 else
-	ifdef NV_BUILD_IGX
-		KBUILD_EXTRA_SYMBOLS=$(NVIDIA_EXTRA_SYMBOLS)
-		ccflags-y += -I$(NVIDIA_SRC_DIR)
-	else
-		KBUILD_EXTRA_SYMBOLS=/usr/src/nvidia/nvidia-oot/Module.symvers
-		ccflags-y += -I/usr/src/nvidia/nvidia-oot/include/
-	endif
+	KBUILD_EXTRA_SYMBOLS=$(NVIDIA_EXTRA_SYMBOLS)
+	ccflags-y += -I$(NVIDIA_SRC_DIR)
 endif
 
 ifdef NV_BUILD_NO_CUDA
