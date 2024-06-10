@@ -253,7 +253,7 @@ cd /path/to/this/project/kernel-module/
 This will generate `picoevb-rdma.ko`.
 
 
-## Building on an IGX GA 1.0 release
+## Building on an IGX GA 1.0 release for dGPU
 
 ```
 sudo apt update
@@ -265,6 +265,18 @@ sudo make (This will generate Module.symvers)
 cd /path/to/this/project/kernel-module/
 checkout rel-36+ branch
 ./build-for-pc-native.sh
+```
+
+This will generate `picoevb-rdma.ko`.
+
+## Building on an IGX GA 1.0 release for iGPU
+
+```
+sudo apt update
+sudo apt install build-essential bc
+cd /path/to/this/project/kernel-module/
+checkout rel-36+ branch
+./build-for-igx-igpu_native.sh
 ```
 
 This will generate `picoevb-rdma.ko`.
