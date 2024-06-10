@@ -252,6 +252,23 @@ cd /path/to/this/project/kernel-module/
 
 This will generate `picoevb-rdma.ko`.
 
+
+## Building on an IGX GA 1.0 release
+
+```
+sudo apt update
+sudo apt install build-essential bc
+sudo apt install ibverbs-utils
+sudo apt install nvidia-cuda-toolkit (Required to build application.)
+cd /usr/src/nvidia-535.171.04
+sudo make (This will generate Module.symvers)
+cd /path/to/this/project/kernel-module/
+checkout rel-36+ branch
+./build-for-pc-native.sh
+```
+
+This will generate `picoevb-rdma.ko`.
+
 ## Loading the Module
 
 To load the kernel module, execute:
@@ -275,6 +292,15 @@ $ lspci -v
 	Kernel driver in use: picoevb-rdma
 ```
 
+$sudo dmesg 
+
+It will show below message in kernel log.
+
+```
+[   66.668508] picoevb_rdma: module verification failed: signature and/or required key missing - tainting kernel
+[   66.670249] picoevb-rdma 0005:06:00.0: Adding to iommu group 4
+[   66.670562] picoevb-rdma 0005:06:00.0: enabling device (0000 -> 0002)
+```
 # User-space Applications
 
 ## Building on Jetson/Drive AGX Xavier, to Run on Jetson/Drive AGX Xavier
@@ -366,6 +392,21 @@ sudo ./rdma-malloc-h2c-perf
 sudo ./rdma-malloc-c2h-perf
 sudo ./rdma-cuda-h2c-perf
 sudo ./rdma-cuda-c2h-perf
+```
+
+### Application troubleshooting.
+
+If sudo ./rdma-cuda, sudo ./rdma-cuda-h2c-perf and sudo ./rdma-cuda-c2h-perf command failed then please try following steps.
+```
+Check CXL firmware version using below command.
+$ibv_devinfo
+*  If version is equal or lower then 28.39.3004 then apply following command.
+	-  $sudo rmmod picoevb-rdma.ko
+	-  $sudo setpci -v -s 5:2:1.0 ecap_acs+6.w=0
+	-  $sudo insmod picoevb-rdma.ko
+	-  Run application.
+*  User can avoid above steps by updating CXL version. Please refer IGX user guide to update CXL version.
+
 ```
 
 ### set-leds
