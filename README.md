@@ -398,14 +398,12 @@ sudo ./rdma-cuda-c2h-perf
 
 If sudo ./rdma-cuda, sudo ./rdma-cuda-h2c-perf and sudo ./rdma-cuda-c2h-perf command failed then please try following steps.
 ```
-Check CXL firmware version using below command.
-$ibv_devinfo
-*  If version is equal or lower then 28.39.3004 then apply following command.
+Check ACS disabled or not.
+*  If ACS is enabled then apply following command.
 	-  $sudo rmmod picoevb-rdma.ko
 	-  $sudo setpci -v -s 5:2:1.0 ecap_acs+6.w=0
 	-  $sudo insmod picoevb-rdma.ko
 	-  Run application.
-*  User can avoid above steps by updating CXL version. Please refer IGX user guide to update CXL version.
 
 ```
 
