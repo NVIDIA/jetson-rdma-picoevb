@@ -253,30 +253,18 @@ cd /path/to/this/project/kernel-module/
 This will generate `picoevb-rdma.ko`.
 
 
-## Building on an IGX GA 1.0 release for dGPU
+## Building for dGPU
 
 ```
 sudo apt update
 sudo apt install build-essential bc
 sudo apt install ibverbs-utils
 sudo apt install nvidia-cuda-toolkit (Required to build application.)
-cd /usr/src/nvidia-535.171.04
+cd /usr/src/nvidia-535.171.04 (Plese update this path as per release)
 sudo make (This will generate Module.symvers)
 cd /path/to/this/project/kernel-module/
 checkout rel-36+ branch
 ./build-for-pc-native.sh
-```
-
-This will generate `picoevb-rdma.ko`.
-
-## Building on an IGX GA 1.0 release for iGPU
-
-```
-sudo apt update
-sudo apt install build-essential bc
-cd /path/to/this/project/kernel-module/
-checkout rel-36+ branch
-./build-for-igx-igpu_native.sh
 ```
 
 This will generate `picoevb-rdma.ko`.
