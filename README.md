@@ -258,7 +258,6 @@ This will generate `picoevb-rdma.ko`.
 ```
 sudo apt update
 sudo apt install build-essential bc
-sudo apt install ibverbs-utils
 sudo apt install nvidia-cuda-toolkit (Required to build application.)
 cd /usr/src/nvidia-535.171.04 (Plese update this path as per release)
 sudo make (This will generate Module.symvers)
