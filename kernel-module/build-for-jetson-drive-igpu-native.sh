@@ -20,26 +20,22 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-SRC_DIR="$(find /usr/src/nvidia/nvidia-oot/* -name nv-p2p.h 2>/dev/null|head -1|xargs dirname 2>/dev/null)"
-if [ ! -d "${SRC_DIR}" ]; then
-	SRC_DIR="$(find /usr/src/./linux-headers-tegra-oot* -name nv-p2p.h 2>/dev/null|head -1|xargs dirname 2>/dev/null)"
+KERNEL_SRC_DIR="/usr/src/nvidia/nvidia-oot/"
+if [ ! -d ${KERNEL_SRC_DIR} ]; then
+	echo "Kernel source not found in $KERNEL_SRC_DIR"
+	KERNEL_SRC_DIR="/usr/src/./linux-headers-tegra-oot*"
+	if [ ! -d ${KERNEL_SRC_DIR} ]; then
+		echo "Kernel source not found in $KERNEL_SRC_DIR"
+		exit;
+	fi
 fi
-echo ${SRC_DIR}
-export NVIDIA_SRC_DIR="$(echo $(cd $SRC_DIR && cd ../ && pwd))"
-if [ ! -d "${NVIDIA_SRC_DIR}" ]; then
-        echo "ERROR: Could not find nv-p2p.h"
-        exit 1
-fi
+echo "Kernel source ${KERNEL_SRC_DIR}"
 
-NV_EXTRA_SYMBOLS="$(find /usr/src/nvidia/nvidia-oot/* -name 'Module.symvers' |head -1)"
-if [ ! -f "${NV_EXTRA_SYMBOLS}" ]; then
-	NV_EXTRA_SYMBOLS="$(find  /usr/src/./linux-headers-tegra-oot* -name 'Module.symvers' |head -1)"
-fi
+NVIDIA_SRC_DIR="$(find ${KERNEL_SRC_DIR}/* -name nv-p2p.h 2>/dev/null|head -1|xargs dirname 2>/dev/null)"
+export NVIDIA_SRC_DIR="$(echo $(cd $NVIDIA_SRC_DIR && cd ../ && pwd))"
+echo ${NVIDIA_SRC_DIR}
 
-echo ${NV_EXTRA_SYMBOLS}
-export NVIDIA_EXTRA_SYMBOLS=${NV_EXTRA_SYMBOLS}
-if [ ! -f "${NVIDIA_EXTRA_SYMBOLS}" ]; then
-        echo "ERROR: Could not find NVIDIA_EXTRA_SYMBOL"
-        exit 1
-fi
+export NVIDIA_EXTRA_SYMBOLS="$(find ${KERNEL_SRC_DIR}* -name 'Module.symvers' |head -1)"
+echo ${NVIDIA_EXTRA_SYMBOLS}
+
 exec make
