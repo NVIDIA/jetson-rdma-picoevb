@@ -20,22 +20,22 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-KERNEL_SRC_DIR="/usr/src/nvidia/nvidia-oot/"
-if [ ! -d ${KERNEL_SRC_DIR} ]; then
-	echo "Kernel source not found in $KERNEL_SRC_DIR"
-	KERNEL_SRC_DIR="/usr/src/./linux-headers-tegra-oot*"
-	if [ ! -d ${KERNEL_SRC_DIR} ]; then
-		echo "Kernel source not found in $KERNEL_SRC_DIR"
+NVIDIA_OOT_SRC_DIR="/usr/src/nvidia/nvidia-oot/"
+if [ ! -d ${NVIDIA_OOT_SRC_DIR} ]; then
+	echo "Nvdia OOT source not found in $NVIDIA_OOT_SRC_DIR"
+	NVIDIA_OOT_SRC_DIR="/usr/src/./linux-headers-tegra-oot*"
+	if [ ! -d ${NVIDIA_OOT_SRC_DIR} ]; then
+		echo "Nvidia OOT  source not found in $NVIDIA_OOT_SRC_DIR"
 		exit;
 	fi
 fi
-echo "Kernel source ${KERNEL_SRC_DIR}"
+echo "Nvidia OOT source found at ${NVIDIA_OOT_SRC_DIR}"
 
-NVIDIA_SRC_DIR="$(find ${KERNEL_SRC_DIR}/* -name nv-p2p.h 2>/dev/null|head -1|xargs dirname 2>/dev/null)"
+NVIDIA_SRC_DIR="$(find ${NVIDIA_OOT_SRC_DIR}/* -name nv-p2p.h 2>/dev/null|head -1|xargs dirname 2>/dev/null)"
 export NVIDIA_SRC_DIR="$(echo $(cd $NVIDIA_SRC_DIR && cd ../ && pwd))"
 echo ${NVIDIA_SRC_DIR}
 
-export NVIDIA_EXTRA_SYMBOLS="$(find ${KERNEL_SRC_DIR}* -name 'Module.symvers' |head -1)"
+export NVIDIA_EXTRA_SYMBOLS="$(find ${NVIDIA_OOT_SRC_DIR}* -name 'Module.symvers' |head -1)"
 echo ${NVIDIA_EXTRA_SYMBOLS}
 
 exec make
