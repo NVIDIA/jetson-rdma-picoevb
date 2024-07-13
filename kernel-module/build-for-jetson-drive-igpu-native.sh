@@ -22,10 +22,9 @@
 
 NVIDIA_OOT_SRC_DIR="/usr/src/nvidia/nvidia-oot/"
 if [ ! -d ${NVIDIA_OOT_SRC_DIR} ]; then
-	echo "Nvdia OOT source not found in $NVIDIA_OOT_SRC_DIR"
 	NVIDIA_OOT_SRC_DIR="/usr/src/./linux-headers-tegra-oot*"
 	if [ ! -d ${NVIDIA_OOT_SRC_DIR} ]; then
-		echo "Nvidia OOT  source not found in $NVIDIA_OOT_SRC_DIR"
+		echo "Nvidia OOT  source not found"
 		exit;
 	fi
 fi
