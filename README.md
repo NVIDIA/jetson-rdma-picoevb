@@ -205,6 +205,8 @@ generates no output for most of its operation, so may appear to have hung,
 but is actually running.
 
 # Linux Kernel Driver
+## Note:
+Please use rel-36+ branch for kernel 5.9+ version.
 
 ## Building on Jetson/Drive AGX Xavier, to Run on Jetson/Drive AGX Xavier
 
