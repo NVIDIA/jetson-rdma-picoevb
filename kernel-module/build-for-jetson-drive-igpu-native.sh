@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -19,5 +19,22 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
+
+NVIDIA_OOT_SRC_DIR="/usr/src/nvidia/nvidia-oot/"
+if [ ! -d ${NVIDIA_OOT_SRC_DIR} ]; then
+	NVIDIA_OOT_SRC_DIR="/usr/src/./linux-headers-tegra-oot*"
+	if [ ! -d ${NVIDIA_OOT_SRC_DIR} ]; then
+		echo "Nvidia OOT  source not found"
+		exit;
+	fi
+fi
+echo "Nvidia OOT source found at ${NVIDIA_OOT_SRC_DIR}"
+
+NVIDIA_SRC_DIR="$(find ${NVIDIA_OOT_SRC_DIR}/* -name nv-p2p.h 2>/dev/null|head -1|xargs dirname 2>/dev/null)"
+export NVIDIA_SRC_DIR="$(echo $(cd $NVIDIA_SRC_DIR && cd ../ && pwd))"
+echo ${NVIDIA_SRC_DIR}
+
+export NVIDIA_EXTRA_SYMBOLS="$(find ${NVIDIA_OOT_SRC_DIR}* -name 'Module.symvers' |head -1)"
+echo ${NVIDIA_EXTRA_SYMBOLS}
 
 exec make
